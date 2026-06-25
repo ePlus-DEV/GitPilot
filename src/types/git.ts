@@ -1,1 +1,17 @@
-export type FileStatusCode='M'|'A'|'D'|'R'|'U'|'?'|'!';export type FileGroup='staged'|'unstaged'|'untracked'|'conflicted';export interface RepositoryInfo{name:string;path:string;currentBranch?:string;isGitRepository:boolean}export interface GitFileStatus{path:string;originalPath?:string;index:FileStatusCode|' ';worktree:FileStatusCode|' ';group:FileGroup}export interface GitStatus{repository:RepositoryInfo;files:GitFileStatus[];ahead:number;behind:number;merging:boolean;rebasing:boolean}export interface CommitInfo{hash:string;shortHash:string;author:string;date:string;message:string;parents:string[];refs:string[]}export interface BranchInfo{name:string;fullName:string;current:boolean;remote:boolean;upstream?:string}export interface ConflictBlock{id:number;startLine:number;endLine:number;current:string;incoming:string;base?:string}export interface CommandResult{command:string;stdout:string;stderr:string;exitCode:number}
+export type GitError={code:string;message:string;stderr:string};
+export type GitCommandOutput={stdout:string;stderr:string;success:boolean;command:string};
+export type GitFileStatus={path:string;originalPath?:string|null;indexStatus:string;worktreeStatus:string;displayStatus:string;binary:boolean};
+export type MergeState={isMerging:boolean;isRebasing:boolean;conflictedFiles:string[]};
+export type GitStatus={currentBranch:string;staged:GitFileStatus[];unstaged:GitFileStatus[];untracked:GitFileStatus[];conflicted:GitFileStatus[];ahead:number;behind:number;mergeState:MergeState};
+export type RepositoryInfo={name:string;path:string;currentBranch:string};
+export type DiffResult={filePath:string;oldText:string;newText:string;patch:string;binary:boolean;cached:boolean};
+export type BranchInfo={name:string;current:boolean;remote:boolean;upstream?:string|null;ahead:number;behind:number};
+export type RemoteInfo={name:string;fetchUrl:string;pushUrl:string};
+export type CommitInfo={hash:string;shortHash:string;parents:string[];author:string;date:string;message:string;refs:string[];head:boolean;graph:string};
+export type CommitFile={path:string;status:string};
+export type StashInfo={index:number;name:string;branch:string;message:string};
+export type TagInfo={name:string;target:string;message:string};
+export type ConflictBlock={id:number;startLine:number;separatorLine:number;endLine:number;current:string;incoming:string};
+export type ParsedConflictFile={path:string;content:string;blocks:ConflictBlock[];hasMarkers:boolean};
+export type Settings={theme:string;gitPath:string;defaultTargetBranch:string;recentRepositories:string[];aiProvider:string;aiApiKey:string;aiModel:string;validationCommands:string[];shortcuts:string[]};
+export type AiResponse={text:string;requiresReview:boolean};
