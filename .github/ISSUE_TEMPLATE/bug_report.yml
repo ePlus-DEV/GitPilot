@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible GitPilot bug
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a GitPilot bug. Please include enough detail to reproduce it safely.
+  - type: input
+    id: version
+    attributes:
+      label: GitPilot version / commit
+      description: App version, commit SHA, or branch.
+      placeholder: "0.1.0 / abc123"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List exact steps and Git commands/repo state if relevant.
+      placeholder: |
+        1. Open repository ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include Git output console text and screenshots if useful.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / console output
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submit checks
+      options:
+        - label: I removed or redacted secrets, tokens, API keys, and private repository URLs.
+          required: true
+        - label: I searched existing issues before filing this bug.
+          required: true

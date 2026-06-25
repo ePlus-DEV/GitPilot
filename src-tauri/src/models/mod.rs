@@ -1,5 +1,5 @@
-pub mod branch;
-pub mod commit;
+pub mod ai;
 pub mod conflict;
-pub mod git_status;
+pub mod git;
 pub mod repository;
+pub mod settings;

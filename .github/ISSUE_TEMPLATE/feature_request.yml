@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest a GitPilot improvement
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow is currently painful or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior and UI you expect.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Repository management
+        - Status / staging
+        - Diff viewer
+        - Commit
+        - Branches / remotes
+        - History / graph
+        - Merge / rebase / conflicts
+        - Stash / tags
+        - Validation
+        - AI assistant
+        - Settings / shortcuts
+        - CI / developer experience
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submit checks
+      options:
+        - label: I searched existing issues before filing this request.
+          required: true

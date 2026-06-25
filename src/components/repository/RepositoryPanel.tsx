@@ -1,0 +1,1 @@
+import { useGitStore } from '../../store/gitStore';export function RepositoryPanel(){const r=useGitStore(s=>s.repo);return <div className="p-3 text-sm"><b>{r?.name}</b><div className="truncate text-slate-500">{r?.path}</div></div>}
