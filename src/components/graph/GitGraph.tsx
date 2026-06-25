@@ -1,0 +1,1 @@
+export function GitGraph(){return <section className="h-[26%] border-b border-pilot-line p-3"><h2 className="font-semibold mb-2">History / Git Graph</h2><div className="text-sm text-slate-400">Commit graph, compare, and read-only checkout are planned for Phase 4.</div></section>}
