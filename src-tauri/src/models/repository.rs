@@ -1,8 +1,8 @@
-use serde::Serialize;
-#[derive(Debug, Serialize)]
+use serde::{Deserialize, Serialize};
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RepositoryInfo {
     pub name: String,
     pub path: String,
-    pub current_branch: Option<String>,
-    pub is_git_repository: bool,
+    pub current_branch: String,
 }

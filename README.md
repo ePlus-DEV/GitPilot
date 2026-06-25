@@ -1,51 +1,37 @@
 # GitPilot
 
-GitPilot is a dark-mode-first desktop Git GUI client built with Tauri v2, React, TypeScript, Tailwind CSS, Zustand, Monaco Editor, and a Rust backend.
+GitPilot is a desktop Git GUI client built with Tauri v2, Rust, React, TypeScript, Tailwind CSS, Zustand, and Monaco Editor.
 
-## Tauri setup commands
+## Features
+
+- Repository management with validation, current branch display, and recent repositories.
+- Git status from `git status --porcelain=v1 -b` grouped as staged, unstaged, untracked, and conflicted.
+- Stage, unstage, discard, delete untracked files, stage all, and unstage all.
+- Monaco side-by-side and inline diff viewer with binary-file handling.
+- Commit staged files, amend last commit, and generate command output.
+- Branch, remote, history, graph, merge, rebase, stash, tag, validation, AI assistant, settings, and keyboard shortcut support.
+- 3-pane merge conflict resolver with conflict marker parsing and save + git add workflow.
+
+## Install
 
 ```bash
 npm install
-npm run dev
+```
+
+## Run development app
+
+```bash
 npm run tauri dev
-npm run build
+```
+
+## Build desktop app
+
+```bash
+npm run tauri build
 ```
 
 ## Architecture
 
-- `src-tauri/src/commands`: Tauri command boundary grouped by Git capability.
-- `src-tauri/src/services`: safe Git CLI wrapper, conflict parser, and settings model.
-- `src-tauri/src/models`: strongly typed serializable Rust models.
-- `src/components`: React feature components by UI area.
-- `src/store`: Zustand application state.
-- `src/services`: typed frontend Tauri API adapter.
-- `src/types`: shared frontend Git and conflict parser types.
+Rust commands live in `src-tauri/src/commands`, shared services in `src-tauri/src/services`, and serialized models in `src-tauri/src/models`. The backend uses native Git CLI through `std::process::Command` with argument arrays; shell strings are not used for Git operations.
 
-The backend prefers the native `git` executable for compatibility and uses `std::process::Command` with explicit argument arrays instead of shell strings.
-
-## Roadmap
-
-### Phase 1 — MVP
-- Open local repositories and validate `.git`.
-- Show status grouped by staged, unstaged, untracked, and conflicted files.
-- Stage, unstage, discard, commit, and inspect diffs in Monaco.
-
-### Phase 2 — Collaboration
-- Branch create/checkout/rename/delete flows.
-- Fetch, pull, push, push-with-upstream.
-- Rich command output and authentication error display.
-
-### Phase 3 — Merge safety
-- Merge workflow state, conflict detection, abort/continue actions.
-- Full 3-pane conflict resolver wired to file IO.
-- PHP, JS/TS, and Laravel validation in the bottom console.
-
-### Phase 4 — History power tools
-- Visual commit graph and commit detail view.
-- Compare commits and read-only checkout.
-- Rebase, stash, and tag management.
-
-### Phase 5 — AI assistance
-- Provider abstraction for OpenAI, Claude, Gemini, OpenRouter, and Ollama.
-- Explain diffs, generate commit messages, suggest branches, and propose conflict resolutions.
-- Require explicit user confirmation before applying AI suggestions.
+React UI lives in `src/components`, state in `src/store/gitStore.ts`, IPC services in `src/services/gitService.ts`, and shared TypeScript types in `src/types/git.ts`.
