@@ -123,17 +123,12 @@ jobs:
             exit 1
           fi
 
-          timeout 60s "$browser_bin" \
-            --headless=new \
-            --no-sandbox \
-            --disable-gpu \
-            --disable-dev-shm-usage \
-            --hide-scrollbars \
-            --run-all-compositor-stages-before-draw \
-            --virtual-time-budget=5000 \
-            --window-size=1440,920 \
-            --screenshot=screenshots/gitpilot.png \
-            http://127.0.0.1:4173
+          timeout 75s node scripts/capture-screenshot.mjs \
+            --browser "$browser_bin" \
+            --url http://127.0.0.1:4173 \
+            --output screenshots/gitpilot.png \
+            --width 1440 \
+            --height 920
 
           test -s screenshots/gitpilot.png
 
@@ -244,7 +239,7 @@ jobs:
           {
             echo "### GitPilot app screenshot"
             echo
-            echo "The workflow builds the app, opens browser demo mode in headless Chrome/Chromium with a hard timeout, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
+            echo "The workflow builds the app, opens browser demo mode, captures it through Chrome DevTools with hard timeouts, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
             echo
             echo "Open this workflow run from the pull request checks to download the screenshot artifact."
           } >> "$GITHUB_STEP_SUMMARY"
