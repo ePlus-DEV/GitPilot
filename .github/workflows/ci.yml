@@ -92,44 +92,24 @@ jobs:
             sleep $((attempt * 15))
           done
 
-      - name: Capture browser screenshot
-        timeout-minutes: 3
+      - name: Generate app screenshot
+        timeout-minutes: 2
         run: |
           set -euo pipefail
           mkdir -p screenshots
 
-          browser_bin="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
-          if [ -z "$browser_bin" ]; then
-            echo "No Chrome/Chromium browser found on the runner." >&2
-            exit 1
-          fi
-          echo "Using browser: $browser_bin"
-
-          npm run preview -- --host 127.0.0.1 --port 4173 > screenshots/gitpilot.log 2>&1 &
-          preview_pid=$!
-          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
-
-          ready=false
-          for _ in {1..30}; do
-            if curl -fsS http://127.0.0.1:4173 >/dev/null; then
-              ready=true
-              break
-            fi
-            sleep 1
-          done
-          if [ "$ready" != "true" ]; then
-            echo "Timed out waiting for Vite preview" >&2
-            cat screenshots/gitpilot.log >&2 || true
-            exit 1
-          fi
-
-          timeout 75s node scripts/capture-screenshot.mjs \
-            --browser "$browser_bin" \
-            --url http://127.0.0.1:4173 \
-            --output screenshots/gitpilot.png \
+          timeout 20s node scripts/render-screenshot.mjs \
+            --output screenshots/gitpilot.svg \
             --width 1440 \
-            --height 920
+            --height 920 | tee screenshots/gitpilot.log
 
+          if command -v magick >/dev/null 2>&1; then
+            timeout 20s magick screenshots/gitpilot.svg screenshots/gitpilot.png
+          else
+            timeout 20s convert screenshots/gitpilot.svg screenshots/gitpilot.png
+          fi
+
+          test -s screenshots/gitpilot.svg
           test -s screenshots/gitpilot.png
 
       - name: Upload app screenshot
@@ -140,6 +120,7 @@ jobs:
           name: gitpilot-app-screenshot
           path: |
             screenshots/gitpilot.png
+            screenshots/gitpilot.svg
             screenshots/gitpilot.log
           if-no-files-found: warn
 
@@ -239,7 +220,7 @@ jobs:
           {
             echo "### GitPilot app screenshot"
             echo
-            echo "The workflow builds the app, opens browser demo mode, captures it through Chrome DevTools with hard timeouts, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
+            echo "The workflow renders a deterministic GitPilot preview from the current repository, converts it to PNG, and uploads it as the \`gitpilot-app-screenshot\` artifact."
             echo
             echo "Open this workflow run from the pull request checks to download the screenshot artifact."
           } >> "$GITHUB_STEP_SUMMARY"
