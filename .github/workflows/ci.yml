@@ -49,4 +49,4 @@ jobs:
           workspaces: src-tauri -> target
 
       - name: Check Tauri backend
-        run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+        run: cargo check --manifest-path src-tauri/Cargo.toml
