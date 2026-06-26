@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_HTTP_MULTIPLEXING: "false"
+  CARGO_HTTP_TIMEOUT: "120"
+  CARGO_NET_RETRY: "10"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -55,10 +60,34 @@ jobs:
           workspaces: src-tauri -> target
 
       - name: Check Tauri backend
-        run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+        run: |
+          for attempt in 1 2 3; do
+            echo "cargo check attempt ${attempt}/3"
+            if cargo check --manifest-path src-tauri/Cargo.toml --locked; then
+              exit 0
+            fi
+
+            if [ "$attempt" = "3" ]; then
+              exit 1
+            fi
+
+            sleep $((attempt * 15))
+          done
 
       - name: Build Tauri app
-        run: npm run tauri -- build
+        run: |
+          for attempt in 1 2 3; do
+            echo "Tauri build attempt ${attempt}/3"
+            if npm run tauri -- build; then
+              exit 0
+            fi
+
+            if [ "$attempt" = "3" ]; then
+              exit 1
+            fi
+
+            sleep $((attempt * 15))
+          done
 
       - name: Launch app and capture screenshot
         run: |
