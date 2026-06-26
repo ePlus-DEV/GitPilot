@@ -1,58 +1,27 @@
+import { useMemo, useState } from 'react';
+import { Filter, GitCommitHorizontal, Search, X } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
 import type { CommitInfo } from '../../types/git';
 
-const LANE_COLORS = [
-  '#38bdf8', // sky
-  '#a78bfa', // violet
-  '#34d399', // emerald
-  '#fb923c', // orange
-  '#f472b6', // pink
-  '#facc15', // yellow
-  '#60a5fa', // blue
-  '#4ade80', // green
-  '#e879f9', // fuchsia
-  '#f87171', // red
-];
-
-const ROW_H = 28;
-const LANE_W = 16;
+const LANE_COLORS = ['#38bdf8','#a78bfa','#34d399','#fb923c','#f472b6','#facc15','#60a5fa','#4ade80','#e879f9','#f87171'];
+const ROW_H = 34;
+const LANE_W = 18;
 const CIRCLE_R = 4;
-const PAD_LEFT = 8;
+const PAD_LEFT = 10;
 
-type RowData = {
-  commit: CommitInfo;
-  lane: number;
-  color: string;
-  // connections to draw in this row: {fromLane, toLane, color, isMerge}
-  lines: Array<{ fromLane: number; toLane: number; color: string; pos: 'top' | 'bottom' | 'full' }>;
-  maxLane: number;
-};
+type RowData = { commit: CommitInfo; lane: number; color: string; lines: Array<{ fromLane: number; toLane: number; color: string; pos: 'top' | 'bottom' }>; maxLane: number };
 
 function buildRows(commits: CommitInfo[]): RowData[] {
-  // lanes[i] = { hash, colorIdx } — which commit hash "owns" lane i going forward
   const lanes: Array<{ hash: string; colorIdx: number } | null> = [];
   const colorCounter = { n: 0 };
-
-  function nextColor(): number {
-    return colorCounter.n++ % LANE_COLORS.length;
-  }
-
-  function findLane(hash: string): number {
-    return lanes.findIndex(l => l?.hash === hash);
-  }
-
-  function freeLane(): number {
-    const idx = lanes.findIndex(l => l === null);
-    return idx === -1 ? lanes.length : idx;
-  }
-
+  const nextColor = () => colorCounter.n++ % LANE_COLORS.length;
+  const findLane = (hash: string) => lanes.findIndex(l => l?.hash === hash);
+  const freeLane = () => { const idx = lanes.findIndex(l => l === null); return idx === -1 ? lanes.length : idx; };
   const rows: RowData[] = [];
 
   for (const commit of commits) {
-    // Find my lane
     let myLane = findLane(commit.hash);
     let myColorIdx: number;
-
     if (myLane === -1) {
       myLane = freeLane();
       myColorIdx = nextColor();
@@ -64,182 +33,99 @@ function buildRows(commits: CommitInfo[]): RowData[] {
 
     const myColor = LANE_COLORS[myColorIdx];
     const lines: RowData['lines'] = [];
+    for (let i = 0; i < lanes.length; i++) if (i !== myLane && lanes[i]) lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[lanes[i]!.colorIdx], pos: 'top' });
 
-    // All lanes that were active BEFORE this commit — draw vertical continuation lines
-    // (they pass through the TOP half of this row)
-    for (let i = 0; i < lanes.length; i++) {
-      if (i === myLane) continue;
-      if (lanes[i] !== null) {
-        lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[lanes[i]!.colorIdx], pos: 'top' });
-      }
-    }
-
-    // My lane: draw line from top to my circle (if I was already tracked)
-    // (already drawn implicitly by the circle row)
-
-    // Now update lanes for this commit's children (parents in git terminology):
-    // First parent continues in my lane
     const parents = commit.parents ?? [];
-
-    // Release my lane first
     lanes[myLane] = null;
-
-    // Assign first parent to my lane
     if (parents[0]) {
       const existingLane = findLane(parents[0]);
-      if (existingLane === -1) {
-        lanes[myLane] = { hash: parents[0], colorIdx: myColorIdx };
-      } else {
-        // First parent already tracked in another lane — merge: draw diagonal bottom half
-        lines.push({ fromLane: myLane, toLane: existingLane, color: myColor, pos: 'bottom' });
-        // myLane stays null (freed)
-      }
+      if (existingLane === -1) lanes[myLane] = { hash: parents[0], colorIdx: myColorIdx };
+      else lines.push({ fromLane: myLane, toLane: existingLane, color: myColor, pos: 'bottom' });
     }
-
-    // Additional parents (merge commits)
     for (let i = 1; i < parents.length; i++) {
-      const p = parents[i];
-      const existingLane = findLane(p);
+      const parent = parents[i];
+      const existingLane = findLane(parent);
       if (existingLane === -1) {
         const newLane = freeLane();
         const newColorIdx = nextColor();
         if (newLane === lanes.length) lanes.push(null);
-        lanes[newLane] = { hash: p, colorIdx: newColorIdx };
-        // Draw line from my lane to newLane (bottom half)
+        lanes[newLane] = { hash: parent, colorIdx: newColorIdx };
         lines.push({ fromLane: myLane, toLane: newLane, color: LANE_COLORS[newColorIdx], pos: 'bottom' });
-      } else {
-        // Already tracked, draw connection bottom half
-        lines.push({ fromLane: myLane, toLane: existingLane, color: LANE_COLORS[lanes[existingLane]!.colorIdx], pos: 'bottom' });
-      }
+      } else lines.push({ fromLane: myLane, toLane: existingLane, color: LANE_COLORS[lanes[existingLane]!.colorIdx], pos: 'bottom' });
     }
-
-    // All lanes active AFTER this commit — draw vertical continuation (bottom half)
-    for (let i = 0; i < lanes.length; i++) {
-      if (i === myLane) continue;
-      if (lanes[i] !== null) {
-        lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[lanes[i]!.colorIdx], pos: 'bottom' });
-      }
-    }
-
-    const maxLane = Math.max(myLane, ...lanes.map((l, i) => l !== null ? i : 0));
-
-    rows.push({ commit, lane: myLane, color: myColor, lines, maxLane });
+    for (let i = 0; i < lanes.length; i++) if (i !== myLane && lanes[i]) lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[lanes[i]!.colorIdx], pos: 'bottom' });
+    rows.push({ commit, lane: myLane, color: myColor, lines, maxLane: Math.max(myLane, ...lanes.map((l, i) => l ? i : 0)) });
   }
-
   return rows;
 }
 
-function GraphRow({ row, idx, selected, onClick }: {
-  row: RowData;
-  idx: number;
-  selected: boolean;
-  onClick: () => void;
-}) {
+const normalized = (value: string) => value.toLowerCase().trim();
+
+function matchesCommit(commit: CommitInfo, query: string, author: string, ref: string) {
+  const q = normalized(query);
+  const refNames = commit.refs.join(' ');
+  const textMatch = !q || [commit.message, commit.hash, commit.shortHash, commit.author, refNames].some(v => normalized(v).includes(q));
+  const authorMatch = author === 'all' || commit.author === author;
+  const refMatch = ref === 'all' || commit.refs.some(r => r.includes(ref));
+  return textMatch && authorMatch && refMatch;
+}
+
+function GraphRow({ row, selected, dimmed, onClick }: { row: RowData; selected: boolean; dimmed: boolean; onClick: () => void }) {
   const svgWidth = (row.maxLane + 1) * LANE_W + PAD_LEFT * 2;
   const cy = ROW_H / 2;
   const cx = PAD_LEFT + row.lane * LANE_W;
-
-  return (
-    <button
-      onClick={onClick}
-      className={`flex w-full items-center gap-0 border-t border-pilot-line text-left hover:bg-slate-800/60 transition-colors ${selected ? 'bg-slate-800' : ''}`}
-      style={{ height: ROW_H }}
-    >
-      {/* SVG graph column */}
-      <svg width={svgWidth} height={ROW_H} className="shrink-0 overflow-visible">
-        {/* Render lines */}
-        {row.lines.map((ln, i) => {
-          const x1 = PAD_LEFT + ln.fromLane * LANE_W;
-          const x2 = PAD_LEFT + ln.toLane * LANE_W;
-          const y1 = ln.pos === 'bottom' ? cy : 0;
-          const y2 = ln.pos === 'top' ? cy : ROW_H;
-
-          if (x1 === x2) {
-            // Straight vertical
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={ln.color} strokeWidth={1.5} />;
-          }
-          // Bezier curve for diagonal
-          const mx = (x1 + x2) / 2;
-          const my = (y1 + y2) / 2;
-          return (
-            <path
-              key={i}
-              d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`}
-              fill="none"
-              stroke={ln.color}
-              strokeWidth={1.5}
-            />
-          );
-        })}
-
-        {/* Commit circle */}
-        <circle cx={cx} cy={cy} r={CIRCLE_R + 1} fill={row.color} opacity={0.2} />
-        <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
-        {row.commit.head && (
-          <circle cx={cx} cy={cy} r={CIRCLE_R + 2.5} fill="none" stroke={row.color} strokeWidth={1.5} />
-        )}
-      </svg>
-
-      {/* Commit info */}
-      <div className="min-w-0 flex-1 flex items-center gap-2 pr-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 min-w-0">
-            {/* Refs (branches/tags) */}
-            {row.commit.refs.slice(0, 3).map(ref => (
-              <span
-                key={ref}
-                className="shrink-0 rounded px-1 py-0 text-[9px] font-semibold"
-                style={{
-                  background: ref.includes('HEAD') ? '#38bdf822' : ref.includes('tag:') ? '#facc1522' : '#a78bfa22',
-                  color: ref.includes('HEAD') ? '#38bdf8' : ref.includes('tag:') ? '#facc15' : '#a78bfa',
-                  border: `1px solid ${ref.includes('HEAD') ? '#38bdf844' : ref.includes('tag:') ? '#facc1544' : '#a78bfa44'}`,
-                }}
-              >
-                {ref.replace('HEAD -> ', '').replace('tag: ', '')}
-              </span>
-            ))}
-            <span className="truncate text-xs text-slate-200">{row.commit.message}</span>
-          </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">
-            {row.commit.shortHash} · {row.commit.author} · {row.commit.date}
-          </div>
+  return <button onClick={onClick} className={`flex w-full items-center border-t border-pilot-line text-left transition-colors hover:bg-slate-800/60 ${selected ? 'bg-slate-800 ring-1 ring-inset ring-sky-500/40' : ''} ${dimmed ? 'opacity-35' : ''}`} style={{ height: ROW_H }}>
+    <svg width={svgWidth} height={ROW_H} className="shrink-0 overflow-visible">
+      {row.lines.map((ln, i) => { const x1 = PAD_LEFT + ln.fromLane * LANE_W; const x2 = PAD_LEFT + ln.toLane * LANE_W; const y1 = ln.pos === 'bottom' ? cy : 0; const y2 = ln.pos === 'top' ? cy : ROW_H; return x1 === x2 ? <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={ln.color} strokeWidth={1.6} /> : <path key={i} d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`} fill="none" stroke={ln.color} strokeWidth={1.6} />; })}
+      <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill={row.color} opacity={0.18} />
+      <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
+      {row.commit.head && <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill="none" stroke={row.color} strokeWidth={1.5} />}
+    </svg>
+    <div className="min-w-0 flex flex-1 items-center gap-3 pr-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          {row.commit.refs.slice(0, 4).map(ref => <span key={ref} className="shrink-0 rounded border border-sky-400/30 bg-sky-400/10 px-1 py-0 text-[9px] font-semibold text-sky-300">{ref.replace('HEAD -> ', '').replace('tag: ', '')}</span>)}
+          <span className="truncate text-xs text-slate-200">{row.commit.message}</span>
         </div>
+        <div className="mt-0.5 text-[10px] text-slate-500">{row.commit.shortHash} · {row.commit.author} · {row.commit.date}</div>
       </div>
-    </button>
-  );
+      {row.commit.parents.length > 1 && <span className="rounded bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-300">merge</span>}
+    </div>
+  </button>;
 }
 
 export function GitGraph() {
-  const { history, selectedCommit, selectCommit } = useGitStore(s => ({
-    history: s.history,
-    selectedCommit: s.selectedCommit,
-    selectCommit: s.selectCommit,
-  }));
+  const { history, selectedCommit, selectCommit } = useGitStore(s => ({ history: s.history, selectedCommit: s.selectedCommit, selectCommit: s.selectCommit }));
+  const [query, setQuery] = useState('');
+  const [author, setAuthor] = useState('all');
+  const [ref, setRef] = useState('all');
+  const rows = useMemo(() => buildRows(history), [history]);
+  const authors = useMemo(() => Array.from(new Set(history.map(c => c.author))).sort(), [history]);
+  const refs = useMemo(() => Array.from(new Set(history.flatMap(c => c.refs.map(r => r.replace('HEAD -> ', '').replace('tag: ', ''))))).sort(), [history]);
+  const visibleRows = rows.filter(row => matchesCommit(row.commit, query, author, ref));
+  const hasFilter = Boolean(query || author !== 'all' || ref !== 'all');
 
-  const rows = buildRows(history);
+  if (history.length === 0) return <div className="flex h-full items-center justify-center text-sm text-slate-500">Open a repository to see commit history</div>;
 
-  if (history.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full text-slate-500 text-sm">
-        Open a repository to see commit history
+  return <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090e1b]">
+    <div className="sticky top-0 z-10 border-b border-pilot-line bg-[#0d1324] p-2">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500"><GitCommitHorizontal size={13} /> Commit Graph · {visibleRows.length}/{history.length}</div>
+        {hasFilter && <button className="icon-btn h-6" onClick={() => { setQuery(''); setAuthor('all'); setRef('all'); }}><X size={12} /> Clear</button>}
       </div>
-    );
-  }
-
-  return (
-    <div className="min-h-0 flex-1 overflow-auto bg-[#090e1b]">
-      <div className="sticky top-0 z-10 bg-[#0d1324] border-b border-pilot-line px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
-        Commit History · {history.length} commits
+      <div className="grid grid-cols-[1fr_150px_150px] gap-2">
+        <label className="relative"><Search size={13} className="pointer-events-none absolute left-2 top-1.5 text-slate-500" /><input className="input h-7 w-full pl-7 text-xs" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search message, hash, author, branch…" /></label>
+        <label className="relative"><Filter size={12} className="pointer-events-none absolute left-2 top-2 text-slate-500" /><select className="input h-7 w-full pl-7 text-xs" value={author} onChange={e => setAuthor(e.target.value)}><option value="all">All authors</option>{authors.map(a => <option key={a} value={a}>{a}</option>)}</select></label>
+        <select className="input h-7 w-full text-xs" value={ref} onChange={e => setRef(e.target.value)}><option value="all">All branches/tags</option>{refs.map(r => <option key={r} value={r}>{r}</option>)}</select>
       </div>
-      {rows.map((row, idx) => (
-        <GraphRow
-          key={row.commit.hash}
-          row={row}
-          idx={idx}
-          selected={selectedCommit?.hash === row.commit.hash}
-          onClick={() => void selectCommit(row.commit)}
-        />
-      ))}
     </div>
-  );
+    <div className="min-h-0 flex-1 overflow-auto">
+      {rows.map(row => {
+        const matched = matchesCommit(row.commit, query, author, ref);
+        if (hasFilter && !matched) return null;
+        return <GraphRow key={row.commit.hash} row={row} selected={selectedCommit?.hash === row.commit.hash} dimmed={hasFilter && !matched} onClick={() => void selectCommit(row.commit)} />;
+      })}
+      {visibleRows.length === 0 && <div className="p-6 text-center text-sm text-slate-500">No commits match the current GitKraken-style filters.</div>}
+    </div>
+  </div>;
 }

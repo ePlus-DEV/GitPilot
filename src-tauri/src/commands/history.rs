@@ -70,3 +70,50 @@ pub fn get_commit_files(repo_path: String, commit: String) -> Result<Vec<CommitF
 pub fn compare_commits(repo_path: String, from: String, to: String) -> Result<String, GitError> {
     git_service::git_text(&repo_path, &["diff", "--stat", &from, &to])
 }
+
+#[tauri::command]
+pub fn checkout_commit(repo_path: String, commit: String) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    git_service::git_checked(&repo_path, &["checkout", &commit])
+}
+#[tauri::command]
+pub fn create_branch_from_commit(
+    repo_path: String,
+    name: String,
+    commit: String,
+    checkout: bool,
+) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    if checkout {
+        git_service::git_checked(&repo_path, &["checkout", "-b", &name, &commit])
+    } else {
+        git_service::git_checked(&repo_path, &["branch", &name, &commit])
+    }
+}
+#[tauri::command]
+pub fn create_tag_from_commit(
+    repo_path: String,
+    name: String,
+    commit: String,
+) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    git_service::git_checked(&repo_path, &["tag", &name, &commit])
+}
+#[tauri::command]
+pub fn cherry_pick_commit(repo_path: String, commit: String) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    git_service::git_checked(&repo_path, &["cherry-pick", &commit])
+}
+#[tauri::command]
+pub fn revert_commit(repo_path: String, commit: String) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    git_service::git_checked(&repo_path, &["revert", "--no-edit", &commit])
+}
+#[tauri::command]
+pub fn reset_to_commit(
+    repo_path: String,
+    commit: String,
+    mode: String,
+) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    let flag = match mode.as_str() {
+        "soft" => "--soft",
+        "hard" => "--hard",
+        _ => "--mixed",
+    };
+    git_service::git_checked(&repo_path, &["reset", flag, &commit])
+}
