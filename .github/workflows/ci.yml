@@ -7,6 +7,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -38,7 +41,10 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            xvfb \
+            xdotool \
+            imagemagick
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -50,3 +56,62 @@ jobs:
 
       - name: Check Tauri backend
         run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Build Tauri app
+        run: npm run tauri -- build
+
+      - name: Launch app and capture screenshot
+        run: |
+          mkdir -p screenshots
+          xvfb-run --auto-servernum --server-args="-screen 0 1440x920x24" bash <<'SCRIPT'
+          set -euo pipefail
+
+          app_bin="$(find src-tauri/target/release -maxdepth 1 -type f -executable -name gitpilot -print -quit)"
+          if [ -z "$app_bin" ]; then
+            echo "Could not find built GitPilot executable in src-tauri/target/release" >&2
+            exit 1
+          fi
+
+          "$app_bin" > screenshots/gitpilot.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+
+          window_id=""
+          for _ in {1..30}; do
+            window_id="$(xdotool search --name GitPilot 2>/dev/null | head -n 1 || true)"
+            if [ -n "$window_id" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [ -z "$window_id" ]; then
+            echo "Timed out waiting for the GitPilot window" >&2
+            exit 1
+          fi
+
+          xdotool windowactivate "$window_id"
+          sleep 2
+          import -window "$window_id" screenshots/gitpilot.png
+          SCRIPT
+
+      - name: Upload app screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitpilot-app-screenshot
+          path: |
+            screenshots/gitpilot.png
+            screenshots/gitpilot.log
+          if-no-files-found: warn
+
+      - name: Summarize screenshot artifact
+        if: always()
+        run: |
+          {
+            echo "### GitPilot app screenshot"
+            echo
+            echo "The workflow builds the Tauri app, launches it in a virtual display, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
+            echo
+            echo "Open this workflow run from the pull request checks to download the screenshot artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
