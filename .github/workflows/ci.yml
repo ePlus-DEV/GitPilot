@@ -119,9 +119,14 @@ jobs:
             exit 1
           fi
 
-          xdotool windowactivate "$window_id"
+          xdotool windowmap "$window_id" 2>/dev/null || true
+          xdotool windowraise "$window_id" 2>/dev/null || true
+          xdotool windowactivate "$window_id" 2>/dev/null || true
           sleep 2
-          import -window "$window_id" screenshots/gitpilot.png
+
+          if ! import -window "$window_id" screenshots/gitpilot.png; then
+            import -window root screenshots/gitpilot.png
+          fi
           SCRIPT
 
       - name: Upload app screenshot
