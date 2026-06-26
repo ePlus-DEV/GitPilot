@@ -52,8 +52,7 @@ jobs:
             dbus-x11 \
             xvfb \
             xdotool \
-            imagemagick \
-            chromium
+            imagemagick
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -94,9 +93,17 @@ jobs:
           done
 
       - name: Capture browser screenshot
+        timeout-minutes: 3
         run: |
           set -euo pipefail
           mkdir -p screenshots
+
+          browser_bin="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$browser_bin" ]; then
+            echo "No Chrome/Chromium browser found on the runner." >&2
+            exit 1
+          fi
+          echo "Using browser: $browser_bin"
 
           npm run preview -- --host 127.0.0.1 --port 4173 > screenshots/gitpilot.log 2>&1 &
           preview_pid=$!
@@ -116,11 +123,14 @@ jobs:
             exit 1
           fi
 
-          chromium \
+          timeout 60s "$browser_bin" \
             --headless=new \
             --no-sandbox \
             --disable-gpu \
             --disable-dev-shm-usage \
+            --hide-scrollbars \
+            --run-all-compositor-stages-before-draw \
+            --virtual-time-budget=5000 \
             --window-size=1440,920 \
             --screenshot=screenshots/gitpilot.png \
             http://127.0.0.1:4173
@@ -234,7 +244,7 @@ jobs:
           {
             echo "### GitPilot app screenshot"
             echo
-            echo "The workflow builds the app, opens browser demo mode in headless Chromium, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
+            echo "The workflow builds the app, opens browser demo mode in headless Chrome/Chromium with a hard timeout, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
             echo
             echo "Open this workflow run from the pull request checks to download the screenshot artifact."
           } >> "$GITHUB_STEP_SUMMARY"
