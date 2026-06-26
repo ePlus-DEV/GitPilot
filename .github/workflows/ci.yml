@@ -49,6 +49,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
+            dbus-x11 \
             xvfb \
             xdotool \
             imagemagick
@@ -94,8 +95,13 @@ jobs:
       - name: Launch app and capture screenshot
         run: |
           mkdir -p screenshots
-          xvfb-run --auto-servernum --server-args="-screen 0 1440x920x24" bash <<'SCRIPT'
+          dbus-run-session -- xvfb-run --auto-servernum --server-args="-screen 0 1440x920x24" bash <<'SCRIPT'
           set -euo pipefail
+
+          export GDK_BACKEND=x11
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export NO_AT_BRIDGE=1
+          export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
           app_bin="$(find src-tauri/target/release -maxdepth 1 -type f -executable -name gitpilot -print -quit)"
           if [ -z "$app_bin" ]; then
