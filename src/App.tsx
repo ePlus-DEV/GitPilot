@@ -17,9 +17,10 @@ export function App() {
   const s = useGitStore();
 
   useEffect(() => {
-    void gitService.getSettings().then(settings =>
-      useGitStore.setState({ settings, recent: settings.recentRepositories })
-    );
+    void gitService.getSettings().then(settings => {
+      useGitStore.setState({ settings, recent: settings.recentRepositories });
+      if (!('__TAURI_INTERNALS__' in window) && settings.recentRepositories[0]) void useGitStore.getState().openRepo(settings.recentRepositories[0]);
+    });
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === 'r') { e.preventDefault(); void s.refresh(); }

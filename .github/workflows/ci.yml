@@ -92,50 +92,45 @@ jobs:
             sleep $((attempt * 15))
           done
 
-      - name: Launch app and capture screenshot
+      - name: Capture browser screenshot
+        timeout-minutes: 3
         run: |
-          mkdir -p screenshots
-          dbus-run-session -- xvfb-run --auto-servernum --server-args="-screen 0 1440x920x24" bash <<'SCRIPT'
           set -euo pipefail
+          mkdir -p screenshots
 
-          export GDK_BACKEND=x11
-          export LIBGL_ALWAYS_SOFTWARE=1
-          export NO_AT_BRIDGE=1
-          export WEBKIT_DISABLE_COMPOSITING_MODE=1
-
-          app_bin="$(find src-tauri/target/release -maxdepth 1 -type f -executable -name gitpilot -print -quit)"
-          if [ -z "$app_bin" ]; then
-            echo "Could not find built GitPilot executable in src-tauri/target/release" >&2
+          browser_bin="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$browser_bin" ]; then
+            echo "No Chrome/Chromium browser found on the runner." >&2
             exit 1
           fi
+          echo "Using browser: $browser_bin"
 
-          "$app_bin" > screenshots/gitpilot.log 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          npm run preview -- --host 127.0.0.1 --port 4173 > screenshots/gitpilot.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
 
-          window_id=""
+          ready=false
           for _ in {1..30}; do
-            window_id="$(xdotool search --name GitPilot 2>/dev/null | head -n 1 || true)"
-            if [ -n "$window_id" ]; then
+            if curl -fsS http://127.0.0.1:4173 >/dev/null; then
+              ready=true
               break
             fi
             sleep 1
           done
-
-          if [ -z "$window_id" ]; then
-            echo "Timed out waiting for the GitPilot window" >&2
+          if [ "$ready" != "true" ]; then
+            echo "Timed out waiting for Vite preview" >&2
+            cat screenshots/gitpilot.log >&2 || true
             exit 1
           fi
 
-          xdotool windowmap "$window_id" 2>/dev/null || true
-          xdotool windowraise "$window_id" 2>/dev/null || true
-          xdotool windowactivate "$window_id" 2>/dev/null || true
-          sleep 2
+          timeout 75s node scripts/capture-screenshot.mjs \
+            --browser "$browser_bin" \
+            --url http://127.0.0.1:4173 \
+            --output screenshots/gitpilot.png \
+            --width 1440 \
+            --height 920
 
-          if ! import -window "$window_id" screenshots/gitpilot.png; then
-            import -window root screenshots/gitpilot.png
-          fi
-          SCRIPT
+          test -s screenshots/gitpilot.png
 
       - name: Upload app screenshot
         id: upload-screenshot
@@ -244,7 +239,7 @@ jobs:
           {
             echo "### GitPilot app screenshot"
             echo
-            echo "The workflow builds the Tauri app, launches it in a virtual display, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
+            echo "The workflow builds the app, opens browser demo mode, captures it through Chrome DevTools with hard timeouts, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
             echo
             echo "Open this workflow run from the pull request checks to download the screenshot artifact."
           } >> "$GITHUB_STEP_SUMMARY"
