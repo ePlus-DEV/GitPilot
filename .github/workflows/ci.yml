@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   issues: write
   pull-requests: write
@@ -64,6 +65,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Typecheck frontend
+        run: npm run typecheck
+
       - name: Build frontend
         run: npm run build
 
@@ -93,21 +97,40 @@ jobs:
         with:
           script: |
             const marker = '<!-- gitpilot-build-artifacts -->';
-            const body = [
-              marker,
-              '### GitPilot build artifacts are ready',
-              '',
-              'Download the desktop builds from this workflow run\'s artifacts:',
-              '',
-              '- Windows: `gitpilot-windows`',
-              '- macOS: `gitpilot-macos`',
-              '- Linux: `gitpilot-linux`',
-            ].join('\n');
-
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const artifactNames = ['gitpilot-windows', 'gitpilot-macos', 'gitpilot-linux'];
 
             try {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                owner,
+                repo,
+                run_id: context.runId,
+                per_page: 100,
+              });
+              const artifactByName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
+              const artifactLines = artifactNames.map((name) => {
+                const artifact = artifactByName.get(name);
+                const label = name.replace('gitpilot-', '');
+                if (!artifact) {
+                  return `- ${label}: \`${name}\` (open [workflow run](${runUrl}) to download)`;
+                }
+                const artifactUrl = `${runUrl}/artifacts/${artifact.id}`;
+                return `- ${label}: [\`${name}\`](${artifactUrl})`;
+              });
+
+              const body = [
+                marker,
+                '### GitPilot build artifacts are ready',
+                '',
+                `One CI workflow run built all 3 desktop apps: [open workflow run](${runUrl}).`,
+                '',
+                'Download links:',
+                '',
+                ...artifactLines,
+              ].join('\n');
+
               const comments = await github.paginate(github.rest.issues.listComments, {
                 owner,
                 repo,
@@ -154,7 +177,9 @@ jobs:
             echo
             echo "This workflow builds GitPilot on Linux, Windows, and macOS and uploads the desktop bundles as artifacts."
             echo
-            echo "Artifacts:"
+            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            echo "Download artifacts from that run:"
             echo "- gitpilot-linux"
             echo "- gitpilot-windows"
             echo "- gitpilot-macos"
