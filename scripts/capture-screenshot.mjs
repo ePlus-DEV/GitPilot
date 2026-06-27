@@ -19,66 +19,94 @@ if (!browserPath || !url || !output) {
 let browser;
 
 async function writePlaceholder() {
-  // 1x1 transparent PNG. It is intentionally tiny but valid and non-empty.
+  await mkdir(dirname(output), { recursive: true });
   await writeFile(output, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64'));
   console.warn('Screenshot unavailable in CI, placeholder generated.');
 }
 
-try {
+async function placeholderFrom(error, label) {
+  console.warn(`${label}: ${error.message}`);
+  await writePlaceholder();
+}
+
+async function main() {
   await mkdir(dirname(output), { recursive: true });
 
-  browser = await chromium.launch({
-    executablePath: browserPath,
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-webgl',
-      '--disable-3d-apis',
-      '--disable-accelerated-2d-canvas',
-      '--disable-accelerated-video-decode',
-      '--disable-background-networking',
-      '--disable-sync',
-      '--disable-extensions',
-      '--hide-scrollbars',
-      '--force-color-profile=srgb',
-    ],
-  });
+  try {
+    browser = await chromium.launch({
+      executablePath: browserPath,
+      headless: true,
+      timeout: 10_000,
+      args: [
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-webgl',
+        '--disable-3d-apis',
+        '--disable-accelerated-2d-canvas',
+        '--disable-accelerated-video-decode',
+        '--disable-background-networking',
+        '--disable-sync',
+        '--disable-extensions',
+        '--hide-scrollbars',
+        '--force-color-profile=srgb',
+      ],
+    });
+  } catch (error) {
+    await placeholderFrom(error, 'Browser launch failed');
+    return;
+  }
 
-  const context = await browser.newContext({
-    viewport: { width, height },
-    deviceScaleFactor: 1,
-  });
-  const page = await context.newPage();
+  let page;
+  try {
+    const context = await browser.newContext({
+      viewport: { width, height },
+      deviceScaleFactor: 1,
+    });
+    page = await context.newPage();
+    await page.route('**/*', route => {
+      const type = route.request().resourceType();
+      if (type === 'image' || type === 'media' || type === 'font') return route.abort();
+      return route.continue();
+    });
+  } catch (error) {
+    await placeholderFrom(error, 'Page setup failed');
+    return;
+  }
 
-  await page.route('**/*', route => {
-    const type = route.request().resourceType();
-    if (type === 'image' || type === 'media' || type === 'font') return route.abort();
-    return route.continue();
-  });
+  try {
+    console.log(`Opening target ${url}`);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+  } catch (error) {
+    await placeholderFrom(error, 'Page navigation failed');
+    return;
+  }
 
-  console.log(`Opening target ${url}`);
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-  await page.addStyleTag({
-    content: `
-      *, *::before, *::after {
-        animation: none !important;
-        transition: none !important;
-        caret-color: transparent !important;
-      }
-      html {
-        scroll-behavior: auto !important;
-      }
-      body {
-        overflow: hidden !important;
-      }
-      * {
-        filter: none !important;
-        backdrop-filter: none !important;
-      }
-    `,
-  });
+  try {
+    await page.addStyleTag({
+      content: `
+        *, *::before, *::after {
+          animation: none !important;
+          transition: none !important;
+          caret-color: transparent !important;
+        }
+        html {
+          scroll-behavior: auto !important;
+        }
+        body {
+          overflow: hidden !important;
+        }
+        * {
+          filter: none !important;
+          backdrop-filter: none !important;
+        }
+      `,
+    });
+  } catch (error) {
+    await placeholderFrom(error, 'Style injection failed');
+    return;
+  }
+
   await page.waitForTimeout(3_000);
 
   console.log(`Capturing screenshot to ${output}`);
@@ -87,23 +115,28 @@ try {
       path: output,
       fullPage: false,
       animations: 'disabled',
-      timeout: 30_000,
+      timeout: 5_000,
     });
     console.log(`Saved screenshot to ${output}`);
+    return;
   } catch (error) {
     console.warn(`Page screenshot failed: ${error.message}`);
-    try {
-      await page.locator('body').screenshot({
-        path: output,
-        animations: 'disabled',
-        timeout: 30_000,
-      });
-      console.log(`Saved body screenshot to ${output}`);
-    } catch (fallbackError) {
-      console.warn(`Body screenshot failed: ${fallbackError.message}`);
-      await writePlaceholder();
-    }
   }
+
+  try {
+    await page.locator('body').screenshot({
+      path: output,
+      animations: 'disabled',
+      timeout: 5_000,
+    });
+    console.log(`Saved body screenshot to ${output}`);
+  } catch (error) {
+    await placeholderFrom(error, 'Body screenshot failed');
+  }
+}
+
+try {
+  await main();
 } finally {
   if (browser) {
     await browser.close().catch(error => console.warn(`Could not close browser cleanly: ${error.message}`));
