@@ -47,3 +47,27 @@ pub fn contains_markers(content: &str) -> bool {
         .lines()
         .any(|l| l.starts_with("<<<<<<<") || l.starts_with("=======") || l.starts_with(">>>>>>>"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_multiple_conflict_blocks() {
+        let parsed = parse(
+            "file.txt".into(),
+            "a\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\nb\n<<<<<<< HEAD\n1\n=======\n2\n>>>>>>> feature\n".into(),
+        );
+        assert!(parsed.has_markers);
+        assert_eq!(parsed.blocks.len(), 2);
+        assert_eq!(parsed.blocks[0].current, "ours");
+        assert_eq!(parsed.blocks[0].incoming, "theirs");
+        assert_eq!(parsed.blocks[1].start_line, 8);
+    }
+
+    #[test]
+    fn detects_any_marker_line() {
+        assert!(contains_markers("x\n=======\ny"));
+        assert!(!contains_markers("plain text"));
+    }
+}

@@ -173,3 +173,43 @@ pub fn reset_to_commit(
     };
     git_service::git_checked(&repo_path, &["reset", flag, &commit])
 }
+
+#[tauri::command]
+pub fn abort_cherry_pick(
+    repo_path: String,
+) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    git_service::git_checked(&repo_path, &["cherry-pick", "--abort"])
+}
+
+#[tauri::command]
+pub fn blame_file(
+    repo_path: String,
+    file_path: String,
+) -> Result<Vec<crate::models::git::BlameLine>, GitError> {
+    let out = git_service::git_text(&repo_path, &["blame", "--line-porcelain", "--", &file_path])?;
+    let mut res = Vec::new();
+    let mut commit = String::new();
+    let mut author = String::new();
+    let mut time = String::new();
+    let mut line_no = 0usize;
+    for l in out.lines() {
+        if l.chars().take(40).all(|c| c.is_ascii_hexdigit()) {
+            let p: Vec<_> = l.split_whitespace().collect();
+            commit = p[0].into();
+            line_no = p.get(2).and_then(|v| v.parse().ok()).unwrap_or(0);
+        } else if let Some(v) = l.strip_prefix("author ") {
+            author = v.into();
+        } else if let Some(v) = l.strip_prefix("author-time ") {
+            time = v.into();
+        } else if let Some(v) = l.strip_prefix('\t') {
+            res.push(crate::models::git::BlameLine {
+                line_number: line_no,
+                commit: commit.clone(),
+                author: author.clone(),
+                timestamp: time.clone(),
+                text: v.into(),
+            });
+        }
+    }
+    Ok(res)
+}

@@ -39,3 +39,19 @@ pub fn pop_stash(repo_path: String, stash: String) -> Result<GitCommandOutput, G
 pub fn drop_stash(repo_path: String, stash: String) -> Result<GitCommandOutput, GitError> {
     git_service::git_checked(&repo_path, &["stash", "drop", &stash])
 }
+
+#[tauri::command]
+pub fn rename_stash(
+    repo_path: String,
+    stash: String,
+    message: String,
+) -> Result<GitCommandOutput, GitError> {
+    let patch = git_service::git_text(&repo_path, &["stash", "show", "-p", &stash])?;
+    let branch = format!("gitpilot-stash-rename-{}", std::process::id());
+    git_service::git_checked(&repo_path, &["stash", "branch", &branch, &stash])?;
+    let out = git_service::git_checked(&repo_path, &["stash", "push", "-m", message.trim()])?;
+    let _ = git_service::git_checked(&repo_path, &["checkout", "-"]);
+    let _ = git_service::git_checked(&repo_path, &["branch", "-D", &branch]);
+    let _ = patch;
+    Ok(out)
+}

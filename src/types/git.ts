@@ -16,3 +16,9 @@ export type ConflictBlock={id:number;startLine:number;separatorLine:number;endLi
 export type ParsedConflictFile={path:string;content:string;blocks:ConflictBlock[];hasMarkers:boolean};
 export type Settings={theme:string;gitPath:string;defaultTargetBranch:string;recentRepositories:string[];aiProvider:string;aiApiKey:string;aiModel:string;validationCommands:string[];shortcuts:string[]};
 export type AiResponse={text:string;requiresReview:boolean};
+
+export type RebaseTodoItem={action:string;hash:string;message:string};
+export type RebaseState={inProgress:boolean;interactive:boolean;currentBranch?:string|null;onto?:string|null;todo:RebaseTodoItem[]};
+export type BlameLine={lineNumber:number;commit:string;author:string;timestamp:string;text:string};
+export type WorktreeInfo={path:string;head:string;branch?:string|null;bare:boolean;detached:boolean};
+export type SearchResult={kind:string;title:string;subtitle:string;target:string};
