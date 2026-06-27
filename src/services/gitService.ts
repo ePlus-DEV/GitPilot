@@ -1,13 +1,36 @@
 import { invoke } from '@tauri-apps/api/core';
+import { demoHistory, demoRepo, demoStatus } from '../demo/currentRepoDemo';
 import type {AiResponse,BranchInfo,CommitFile,CommitInfo,DiffResult,GitCommandOutput,GitStatus,ParsedConflictFile,RemoteInfo,RepositoryInfo,Settings,StashInfo,TagInfo} from '../types/git';
-const call=<T>(cmd:string,args:Record<string,unknown>={})=>invoke<T>(cmd,args);
+
+const isTauriRuntime=()=>typeof window!=='undefined'&&'__TAURI_INTERNALS__' in window;
+const demoSettings={theme:'dark',gitPath:'git',defaultTargetBranch:'main',recentRepositories:[demoRepo.path],aiProvider:'ollama',aiApiKey:'',aiModel:'',validationCommands:[],shortcuts:[]};
+const demoCall=<T>(cmd:string,args:Record<string,unknown>={}):Promise<T>=>{
+ switch(cmd){
+  case 'get_settings': return Promise.resolve(demoSettings as T);
+  case 'list_recent_repositories': return Promise.resolve([demoRepo.path] as T);
+  case 'save_recent_repository': return Promise.resolve([String(args.path??demoRepo.path)] as T);
+  case 'remove_recent_repository': return Promise.resolve([] as T);
+  case 'validate_repository': return Promise.resolve(true as T);
+  case 'open_repository': return Promise.resolve({...demoRepo,path:String(args.path??demoRepo.path)} as T);
+  case 'get_status': return Promise.resolve(demoStatus as T);
+  case 'list_branches': return Promise.resolve([{name:demoStatus.currentBranch,current:true,remote:false,upstream:null,ahead:0,behind:0}] as T);
+  case 'list_remotes': return Promise.resolve([] as T);
+  case 'get_history': return Promise.resolve(demoHistory as T);
+  case 'list_stashes': return Promise.resolve([] as T);
+  case 'list_tags': return Promise.resolve([] as T);
+  case 'get_commit_files': return Promise.resolve([] as T);
+  default: return Promise.reject(new Error(`Demo mode does not implement ${cmd}. Open the Tauri app for write operations.`));
+ }
+};
+const call=<T>(cmd:string,args:Record<string,unknown>={})=>isTauriRuntime()?invoke<T>(cmd,args):demoCall<T>(cmd,args);
+
 export const gitService={
  openRepository:(path:string)=>call<RepositoryInfo>('open_repository',{path}), validateRepository:(path:string)=>call<boolean>('validate_repository',{path}), listRecentRepositories:()=>call<string[]>('list_recent_repositories'), saveRecentRepository:(path:string)=>call<string[]>('save_recent_repository',{path}), removeRecentRepository:(path:string)=>call<string[]>('remove_recent_repository',{path}),
  getStatus:(repoPath:string)=>call<GitStatus>('get_status',{repoPath}), stageFile:(repoPath:string,filePath:string)=>call<GitCommandOutput>('stage_file',{repoPath,filePath}), unstageFile:(repoPath:string,filePath:string)=>call<GitCommandOutput>('unstage_file',{repoPath,filePath}), stageAll:(repoPath:string)=>call<GitCommandOutput>('stage_all',{repoPath}), unstageAll:(repoPath:string)=>call<GitCommandOutput>('unstage_all',{repoPath}), discardFile:(repoPath:string,filePath:string)=>call<GitCommandOutput>('discard_file',{repoPath,filePath}), deleteUntrackedFile:(repoPath:string,filePath:string)=>call<GitCommandOutput>('delete_untracked_file',{repoPath,filePath}),
  getDiff:(repoPath:string,filePath:string,cached:boolean)=>call<DiffResult>('get_diff',{repoPath,filePath,cached}), getCommitFileDiff:(repoPath:string,commit:string,filePath:string)=>call<DiffResult>('get_commit_file_diff',{repoPath,commit,filePath}), commit:(repoPath:string,message:string,amend:boolean)=>call<GitCommandOutput>('commit',{repoPath,message,amend}), stagedDiff:(repoPath:string)=>call<string>('staged_diff',{repoPath}),
  listBranches:(repoPath:string)=>call<BranchInfo[]>('list_branches',{repoPath}), createBranch:(repoPath:string,name:string,checkout:boolean)=>call<GitCommandOutput>('create_branch',{repoPath,name,checkout}), checkoutBranch:(repoPath:string,name:string)=>call<GitCommandOutput>('checkout_branch',{repoPath,name}), renameBranch:(repoPath:string,oldName:string,newName:string)=>call<GitCommandOutput>('rename_branch',{repoPath,oldName,newName}), deleteBranch:(repoPath:string,name:string,force:boolean)=>call<GitCommandOutput>('delete_branch',{repoPath,name,force}), compareBranch:(repoPath:string,branch:string)=>call<string>('compare_branch',{repoPath,branch}),
  listRemotes:(repoPath:string)=>call<RemoteInfo[]>('list_remotes',{repoPath}), fetch:(repoPath:string,remote='origin')=>call<GitCommandOutput>('fetch',{repoPath,remote}), pull:(repoPath:string)=>call<GitCommandOutput>('pull',{repoPath}), push:(repoPath:string)=>call<GitCommandOutput>('push',{repoPath}), pushNewBranch:(repoPath:string,remote:string,branch:string)=>call<GitCommandOutput>('push_new_branch',{repoPath,remote,branch}),
- getHistory:(repoPath:string,limit=80)=>call<CommitInfo[]>('get_history',{repoPath,limit}), getCommitFiles:(repoPath:string,commit:string)=>call<CommitFile[]>('get_commit_files',{repoPath,commit}), compareCommits:(repoPath:string,from:string,to:string)=>call<string>('compare_commits',{repoPath,from,to}),
+ getHistory:(repoPath:string,limit=80)=>call<CommitInfo[]>('get_history',{repoPath,limit}), getCommitFiles:(repoPath:string,commit:string)=>call<CommitFile[]>('get_commit_files',{repoPath,commit}), compareCommits:(repoPath:string,from:string,to:string)=>call<string>('compare_commits',{repoPath,from,to}), checkoutCommit:(repoPath:string,commit:string)=>call<GitCommandOutput>('checkout_commit',{repoPath,commit}), createBranchFromCommit:(repoPath:string,name:string,commit:string,checkout:boolean)=>call<GitCommandOutput>('create_branch_from_commit',{repoPath,name,commit,checkout}), createTagFromCommit:(repoPath:string,name:string,commit:string)=>call<GitCommandOutput>('create_tag_from_commit',{repoPath,name,commit}), cherryPickCommit:(repoPath:string,commit:string)=>call<GitCommandOutput>('cherry_pick_commit',{repoPath,commit}), revertCommit:(repoPath:string,commit:string)=>call<GitCommandOutput>('revert_commit',{repoPath,commit}), resetToCommit:(repoPath:string,commit:string,mode:'soft'|'mixed'|'hard')=>call<GitCommandOutput>('reset_to_commit',{repoPath,commit,mode}),
  mergeBranch:(repoPath:string,branch:string)=>call<GitCommandOutput>('merge_branch',{repoPath,branch}), abortMerge:(repoPath:string)=>call<GitCommandOutput>('abort_merge',{repoPath}), continueMerge:(repoPath:string)=>call<GitCommandOutput>('continue_merge',{repoPath}), parseConflictFile:(repoPath:string,filePath:string)=>call<ParsedConflictFile>('parse_conflict_file',{repoPath,filePath}), saveResolvedFile:(repoPath:string,filePath:string,content:string)=>call<GitCommandOutput>('save_resolved_file',{repoPath,filePath,content}),
  startRebase:(repoPath:string,onto:string)=>call<GitCommandOutput>('start_rebase',{repoPath,onto}), continueRebase:(repoPath:string)=>call<GitCommandOutput>('continue_rebase',{repoPath}), abortRebase:(repoPath:string)=>call<GitCommandOutput>('abort_rebase',{repoPath}), skipRebase:(repoPath:string)=>call<GitCommandOutput>('skip_rebase',{repoPath}),
  listStashes:(repoPath:string)=>call<StashInfo[]>('list_stashes',{repoPath}), createStash:(repoPath:string,message:string)=>call<GitCommandOutput>('create_stash',{repoPath,message}), applyStash:(repoPath:string,stash:string)=>call<GitCommandOutput>('apply_stash',{repoPath,stash}), popStash:(repoPath:string,stash:string)=>call<GitCommandOutput>('pop_stash',{repoPath,stash}), dropStash:(repoPath:string,stash:string)=>call<GitCommandOutput>('drop_stash',{repoPath,stash}),
