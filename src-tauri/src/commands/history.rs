@@ -3,18 +3,65 @@ use crate::{
     services::git_service,
 };
 #[tauri::command]
-pub fn get_history(repo_path: String, limit: u32) -> Result<Vec<CommitInfo>, GitError> {
+pub fn get_history(
+    repo_path: String,
+    limit: u32,
+    branch: Option<String>,
+    author: Option<String>,
+    since: Option<String>,
+    until: Option<String>,
+    keyword: Option<String>,
+    file_path: Option<String>,
+) -> Result<Vec<CommitInfo>, GitError> {
     let fmt = "%H%x1f%h%x1f%P%x1f%an%x1f%ad%x1f%d%x1f%s";
-    let out = git_service::git_text(
-        &repo_path,
-        &[
-            "log",
-            "--graph",
-            "--date=short",
-            &format!("--max-count={limit}"),
-            &format!("--pretty=format:{fmt}"),
-        ],
-    )?;
+    let max_count = format!("--max-count={limit}");
+    let pretty = format!("--pretty=format:{fmt}");
+    let author_arg = author
+        .filter(|v| !v.trim().is_empty() && v != "all")
+        .map(|v| format!("--author={v}"));
+    let since_arg = since
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| format!("--since={v}"));
+    let until_arg = until
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| format!("--until={v}"));
+    let grep_arg = keyword
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| format!("--grep={v}"));
+    let branch_arg = branch.filter(|v| !v.trim().is_empty() && v != "all");
+    let file_arg = file_path.filter(|v| !v.trim().is_empty());
+
+    let mut args = vec![
+        "log".to_string(),
+        "--graph".to_string(),
+        "--decorate".to_string(),
+        "--date=short".to_string(),
+        max_count,
+        pretty,
+    ];
+    if let Some(author) = author_arg {
+        args.push(author);
+    }
+    if let Some(since) = since_arg {
+        args.push(since);
+    }
+    if let Some(until) = until_arg {
+        args.push(until);
+    }
+    if let Some(grep) = grep_arg {
+        args.push(grep);
+    }
+    if let Some(branch) = branch_arg {
+        args.push(branch);
+    } else {
+        args.push("--all".to_string());
+    }
+    if let Some(path) = file_arg {
+        args.push("--".to_string());
+        args.push(path);
+    }
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let out = git_service::git_text(&repo_path, &refs)?;
     Ok(out
         .lines()
         .filter_map(|l| {
@@ -72,7 +119,10 @@ pub fn compare_commits(repo_path: String, from: String, to: String) -> Result<St
 }
 
 #[tauri::command]
-pub fn checkout_commit(repo_path: String, commit: String) -> Result<crate::models::git::GitCommandOutput, GitError> {
+pub fn checkout_commit(
+    repo_path: String,
+    commit: String,
+) -> Result<crate::models::git::GitCommandOutput, GitError> {
     git_service::git_checked(&repo_path, &["checkout", &commit])
 }
 #[tauri::command]
@@ -97,11 +147,17 @@ pub fn create_tag_from_commit(
     git_service::git_checked(&repo_path, &["tag", &name, &commit])
 }
 #[tauri::command]
-pub fn cherry_pick_commit(repo_path: String, commit: String) -> Result<crate::models::git::GitCommandOutput, GitError> {
+pub fn cherry_pick_commit(
+    repo_path: String,
+    commit: String,
+) -> Result<crate::models::git::GitCommandOutput, GitError> {
     git_service::git_checked(&repo_path, &["cherry-pick", &commit])
 }
 #[tauri::command]
-pub fn revert_commit(repo_path: String, commit: String) -> Result<crate::models::git::GitCommandOutput, GitError> {
+pub fn revert_commit(
+    repo_path: String,
+    commit: String,
+) -> Result<crate::models::git::GitCommandOutput, GitError> {
     git_service::git_checked(&repo_path, &["revert", "--no-edit", &commit])
 }
 #[tauri::command]
