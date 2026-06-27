@@ -8,6 +8,7 @@ export type DiffResult={filePath:string;oldText:string;newText:string;patch:stri
 export type BranchInfo={name:string;current:boolean;remote:boolean;upstream?:string|null;ahead:number;behind:number};
 export type RemoteInfo={name:string;fetchUrl:string;pushUrl:string};
 export type CommitInfo={hash:string;shortHash:string;parents:string[];author:string;date:string;message:string;refs:string[];head:boolean;graph:string};
+export type HistoryFilters={branch?:string;author?:string;since?:string;until?:string;keyword?:string;filePath?:string};
 export type CommitFile={path:string;status:string};
 export type StashInfo={index:number;name:string;branch:string;message:string};
 export type TagInfo={name:string;target:string;message:string};
