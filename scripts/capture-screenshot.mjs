@@ -72,7 +72,7 @@ async function parseWsMessage(event) {
   return JSON.parse(String(data));
 }
 
-function sendDevtools(ws, method, params = {}, timeoutMs = 15_000) {
+function sendDevtools(ws, method, params = {}, timeoutMs = 60_000) {
   const id = sendDevtools.nextId++;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolve, reject) => {
@@ -152,15 +152,15 @@ try {
   await sendDevtools(ws, 'Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
   await sendDevtools(ws, 'Page.navigate', { url });
   await Promise.race([loaded, delay(10_000)]);
-  await delay(2_000);
+  await delay(3_000);
 
   console.log('Capturing screenshot');
-  const screenshot = await sendDevtools(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true }, 15_000);
+  const screenshot = await sendDevtools(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true }, 60_000);
   await writeFile(output, Buffer.from(screenshot.data, 'base64'));
   ws.close();
   console.log(`Saved screenshot to ${output}`);
 } finally {
   await stopChrome();
-  await rm(profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 })
+  await rm(profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
     .catch(error => console.warn(`Could not remove temporary Chrome profile ${profileDir}: ${error.message}`));
 }

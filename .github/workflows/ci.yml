@@ -123,12 +123,16 @@ jobs:
             exit 1
           fi
 
-          timeout 75s node scripts/capture-screenshot.mjs \
+          if ! timeout 120s node scripts/capture-screenshot.mjs \
             --browser "$browser_bin" \
             --url http://127.0.0.1:4173 \
             --output screenshots/gitpilot.png \
             --width 1440 \
-            --height 920
+            --height 920; then
+            echo "Screenshot capture failed. Vite preview log:" >&2
+            cat screenshots/gitpilot.log >&2 || true
+            exit 1
+          fi
 
           test -s screenshots/gitpilot.png
 
