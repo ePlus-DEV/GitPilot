@@ -5,7 +5,8 @@ use crate::{
 
 fn matches(q: &str, text: &str) -> bool {
     let q = q.to_lowercase();
-    let mut it = text.to_lowercase().chars();
+    let text = text.to_lowercase();
+    let mut it = text.chars();
     q.chars().all(|c| it.any(|x| x == c))
 }
 #[tauri::command]
