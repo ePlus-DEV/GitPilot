@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,6 +27,24 @@ let chrome;
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function stopChrome() {
+  if (!chrome || chrome.exitCode !== null) return;
+
+  chrome.kill('SIGTERM');
+  await Promise.race([
+    once(chrome, 'exit').catch(() => undefined),
+    delay(2_000),
+  ]);
+
+  if (chrome.exitCode === null) {
+    chrome.kill('SIGKILL');
+    await Promise.race([
+      once(chrome, 'exit').catch(() => undefined),
+      delay(1_000),
+    ]);
+  }
 }
 
 async function waitForJson(endpoint, timeoutMs = 15_000) {
@@ -133,8 +152,7 @@ try {
   await sendDevtools(ws, 'Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
   await sendDevtools(ws, 'Page.navigate', { url });
   await Promise.race([loaded, delay(10_000)]);
-  await sendDevtools(ws, 'Runtime.evaluate', { expression: 'document.fonts?.ready ?? Promise.resolve()', awaitPromise: true }, 5_000);
-  await delay(1_000);
+  await delay(2_000);
 
   console.log('Capturing screenshot');
   const screenshot = await sendDevtools(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true }, 15_000);
@@ -142,7 +160,7 @@ try {
   ws.close();
   console.log(`Saved screenshot to ${output}`);
 } finally {
-  if (chrome && !chrome.killed) chrome.kill('SIGTERM');
-  setTimeout(() => chrome && !chrome.killed && chrome.kill('SIGKILL'), 2_000).unref();
-  await rm(profileDir, { recursive: true, force: true });
+  await stopChrome();
+  await rm(profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 })
+    .catch(error => console.warn(`Could not remove temporary Chrome profile ${profileDir}: ${error.message}`));
 }
