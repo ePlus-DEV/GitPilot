@@ -8,23 +8,31 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
-
-env:
-  CARGO_HTTP_MULTIPLEXING: "false"
-  CARGO_HTTP_TIMEOUT: "120"
-  CARGO_NET_RETRY: "10"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Build and check
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux
+            artifact: gitpilot-linux
+          - os: windows-latest
+            name: Windows
+            artifact: gitpilot-windows
+          - os: macos-latest
+            name: macOS
+            artifact: gitpilot-macos
 
     steps:
       - name: Checkout repository
@@ -35,170 +43,65 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Type-check and build frontend
-        run: npm run build
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux dependencies for Tauri
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf \
-            dbus-x11 \
-            xvfb \
-            xdotool \
-            imagemagick
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+            patchelf
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
       - name: Check Tauri backend
-        run: |
-          for attempt in 1 2 3; do
-            echo "cargo check attempt ${attempt}/3"
-            if cargo check --manifest-path src-tauri/Cargo.toml --locked; then
-              exit 0
-            fi
+        run: npm run tauri:check
 
-            if [ "$attempt" = "3" ]; then
-              exit 1
-            fi
+      - name: Build Tauri desktop app
+        run: npm run tauri -- build
 
-            sleep $((attempt * 15))
-          done
-
-      - name: Build Tauri app
-        run: |
-          for attempt in 1 2 3; do
-            echo "Tauri build attempt ${attempt}/3"
-            if npm run tauri -- build; then
-              exit 0
-            fi
-
-            if [ "$attempt" = "3" ]; then
-              exit 1
-            fi
-
-            sleep $((attempt * 15))
-          done
-
-      - name: Launch app and capture screenshot
-        run: |
-          mkdir -p screenshots
-          dbus-run-session -- xvfb-run --auto-servernum --server-args="-screen 0 1440x920x24" bash <<'SCRIPT'
-          set -euo pipefail
-
-          export GDK_BACKEND=x11
-          export LIBGL_ALWAYS_SOFTWARE=1
-          export NO_AT_BRIDGE=1
-          export WEBKIT_DISABLE_COMPOSITING_MODE=1
-
-          app_bin="$(find src-tauri/target/release -maxdepth 1 -type f -executable -name gitpilot -print -quit)"
-          if [ -z "$app_bin" ]; then
-            echo "Could not find built GitPilot executable in src-tauri/target/release" >&2
-            exit 1
-          fi
-
-          "$app_bin" > screenshots/gitpilot.log 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
-
-          window_id=""
-          for _ in {1..30}; do
-            window_id="$(xdotool search --name GitPilot 2>/dev/null | head -n 1 || true)"
-            if [ -n "$window_id" ]; then
-              break
-            fi
-            sleep 1
-          done
-
-          if [ -z "$window_id" ]; then
-            echo "Timed out waiting for the GitPilot window" >&2
-            exit 1
-          fi
-
-          xdotool windowmap "$window_id" 2>/dev/null || true
-          xdotool windowraise "$window_id" 2>/dev/null || true
-          xdotool windowactivate "$window_id" 2>/dev/null || true
-          sleep 2
-
-          if ! import -window "$window_id" screenshots/gitpilot.png; then
-            import -window root screenshots/gitpilot.png
-          fi
-          SCRIPT
-
-      - name: Upload app screenshot
-        id: upload-screenshot
-        if: always()
-        uses: actions/upload-artifact@v5
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: gitpilot-app-screenshot
+          name: ${{ matrix.artifact }}
           path: |
-            screenshots/gitpilot.png
-            screenshots/gitpilot.log
-          if-no-files-found: warn
+            src-tauri/target/release/bundle/**
+          if-no-files-found: error
 
-      - name: Publish screenshot for inline preview
-        id: publish-screenshot
-        if: success() && github.event_name == 'pull_request' && hashFiles('screenshots/gitpilot.png') != ''
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-
-          pr_number="${{ github.event.pull_request.number }}"
-          image_path="/tmp/gitpilot-screenshot-${pr_number}.png"
-          cp screenshots/gitpilot.png "$image_path"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          if git ls-remote --exit-code --heads origin ci-screenshots >/dev/null 2>&1; then
-            git fetch origin ci-screenshots:ci-screenshots
-            git checkout ci-screenshots
-          else
-            git checkout --orphan ci-screenshots
-            git rm -rf .
-          fi
-
-          mkdir -p "pr-${pr_number}"
-          cp "$image_path" "pr-${pr_number}/gitpilot.png"
-          git add "pr-${pr_number}/gitpilot.png"
-
-          if git diff --cached --quiet; then
-            echo "Screenshot branch already has the latest image."
-          else
-            git commit -m "Update GitPilot screenshot for PR #${pr_number}"
-            git push origin HEAD:ci-screenshots
-          fi
-
-          echo "image-url=https://raw.githubusercontent.com/${{ github.repository }}/ci-screenshots/pr-${pr_number}/gitpilot.png?run=${{ github.run_id }}" >> "$GITHUB_OUTPUT"
-
-      - name: Comment screenshot on pull request
-        if: success() && github.event_name == 'pull_request' && steps.upload-screenshot.outputs.artifact-url != ''
+  comment-artifacts:
+    name: Comment artifact download instructions
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && always() && needs.build.result == 'success'
+    steps:
+      - name: Comment on pull request
         uses: actions/github-script@v8
         continue-on-error: true
         with:
           script: |
-            const marker = '<!-- gitpilot-app-screenshot -->';
-            const artifactUrl = '${{ steps.upload-screenshot.outputs.artifact-url }}';
-            const imageUrl = '${{ steps.publish-screenshot.outputs.image-url }}' || artifactUrl;
+            const marker = '<!-- gitpilot-build-artifacts -->';
             const body = [
               marker,
-              '### GitPilot app screenshot',
+              '### GitPilot build artifacts are ready',
               '',
-              `![GitPilot app screenshot](${imageUrl})`,
+              'Download the desktop builds from this workflow run\'s artifacts:',
               '',
-              `Download all screenshot artifacts: ${artifactUrl}`,
+              '- Windows: `gitpilot-windows`',
+              '- macOS: `gitpilot-macos`',
+              '- Linux: `gitpilot-linux`',
             ].join('\n');
 
             const { owner, repo } = context.repo;
@@ -232,19 +135,27 @@ jobs:
               }
             } catch (error) {
               if (error.status === 403) {
-                core.warning(`Skipping PR screenshot comment because the workflow token cannot write comments: ${error.message}`);
+                core.warning(`Skipping PR artifact comment because the workflow token cannot write comments: ${error.message}`);
               } else {
                 throw error;
               }
             }
 
-      - name: Summarize screenshot artifact
-        if: always()
+  summarize-artifacts:
+    name: Summarize artifact downloads
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Write summary
         run: |
           {
-            echo "### GitPilot app screenshot"
+            echo "### GitPilot desktop build artifacts"
             echo
-            echo "The workflow builds the Tauri app, launches it in a virtual display, and uploads the screenshot as the \`gitpilot-app-screenshot\` artifact."
+            echo "This workflow builds GitPilot on Linux, Windows, and macOS and uploads the desktop bundles as artifacts."
             echo
-            echo "Open this workflow run from the pull request checks to download the screenshot artifact."
+            echo "Artifacts:"
+            echo "- gitpilot-linux"
+            echo "- gitpilot-windows"
+            echo "- gitpilot-macos"
           } >> "$GITHUB_STEP_SUMMARY"

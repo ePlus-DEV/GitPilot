@@ -21,7 +21,30 @@ fn ensure_tauri_icons() -> io::Result<()> {
         }
     }
 
+    let ico_path = icons_dir.join("icon.ico");
+    if !ico_path.exists() {
+        fs::write(ico_path, render_ico(32))?;
+    }
+
     Ok(())
+}
+
+fn render_ico(size: u32) -> Vec<u8> {
+    let png = render_png(size, size);
+    let mut ico = Vec::with_capacity(22 + png.len());
+    ico.extend_from_slice(&[0, 0]);
+    ico.extend_from_slice(&[1, 0]);
+    ico.extend_from_slice(&[1, 0]);
+    ico.push(if size >= 256 { 0 } else { size as u8 });
+    ico.push(if size >= 256 { 0 } else { size as u8 });
+    ico.push(0);
+    ico.push(0);
+    ico.extend_from_slice(&1u16.to_le_bytes());
+    ico.extend_from_slice(&32u16.to_le_bytes());
+    ico.extend_from_slice(&(png.len() as u32).to_le_bytes());
+    ico.extend_from_slice(&22u32.to_le_bytes());
+    ico.extend_from_slice(&png);
+    ico
 }
 
 fn render_png(width: u32, height: u32) -> Vec<u8> {
