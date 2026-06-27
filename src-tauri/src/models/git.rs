@@ -125,3 +125,50 @@ pub struct TagInfo {
     pub target: String,
     pub message: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RebaseTodoItem {
+    pub action: String,
+    pub hash: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RebaseState {
+    pub in_progress: bool,
+    pub interactive: bool,
+    pub current_branch: Option<String>,
+    pub onto: Option<String>,
+    pub todo: Vec<RebaseTodoItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlameLine {
+    pub line_number: usize,
+    pub commit: String,
+    pub author: String,
+    pub timestamp: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeInfo {
+    pub path: String,
+    pub head: String,
+    pub branch: Option<String>,
+    pub bare: bool,
+    pub detached: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResult {
+    pub kind: String,
+    pub title: String,
+    pub subtitle: String,
+    pub target: String,
+}

@@ -35,3 +35,15 @@ npm run tauri build
 Rust commands live in `src-tauri/src/commands`, shared services in `src-tauri/src/services`, and serialized models in `src-tauri/src/models`. The backend uses native Git CLI through `std::process::Command` with argument arrays; shell strings are not used for Git operations.
 
 React UI lives in `src/components`, state in `src/store/gitStore.ts`, IPC services in `src/services/gitService.ts`, and shared TypeScript types in `src/types/git.ts`.
+
+## GitPilot feature coverage
+
+GitPilot now includes first-pass production workflows for the highest-priority Git operations:
+
+- Visual conflict resolution parses conflict markers, presents current/incoming/result panes, supports accept-current, accept-incoming, accept-both, manual edits, and stages files after all markers are removed.
+- Rebase tooling supports normal rebase, paused-state detection, continue, abort, skip, and an interactive todo editor for pick, reword, edit, squash, fixup, drop, and reorder operations.
+- Cherry-pick commands support applying a selected commit and aborting an in-progress cherry-pick so conflicts can route through the same resolver.
+- Stash management supports list, push, apply, pop, drop, and rename from the stash panel.
+- Productivity primitives are available for blame, fuzzy smart search, and worktree list/create/remove commands.
+
+Some larger roadmap items, such as provider-backed pull-request review, CI aggregation, enterprise telemetry, and release signing, are intentionally exposed as modular command/service seams for follow-up hardening rather than hard-coded into the UI.
