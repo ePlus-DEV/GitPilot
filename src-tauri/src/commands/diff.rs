@@ -44,8 +44,19 @@ pub fn get_commit_file_diff(
     commit: String,
     file_path: String,
 ) -> Result<DiffResult, GitError> {
-    let spec = format!("{commit}^..{commit}");
-    let patch = git_service::git_checked(&repo_path, &["diff", &spec, "--", &file_path])?.stdout;
+    let patch = git_service::git_checked(
+        &repo_path,
+        &[
+            "show",
+            "--format=",
+            "--find-renames",
+            "--first-parent",
+            &commit,
+            "--",
+            &file_path,
+        ],
+    )?
+    .stdout;
     Ok(DiffResult {
         file_path,
         old_text: String::new(),

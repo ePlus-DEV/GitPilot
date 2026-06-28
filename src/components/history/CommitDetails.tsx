@@ -6,6 +6,7 @@ export function CommitDetails() {
   const repo = useGitStore(s => s.repo?.path);
   const commit = useGitStore(s => s.selectedCommit);
   const commitFiles = useGitStore(s => s.commitFiles);
+  const commitFilesLoading = useGitStore(s => s.commitFilesLoading);
   const run = useGitStore(s => s.run);
 
   if (!commit) return null;
@@ -63,7 +64,8 @@ export function CommitDetails() {
           <span>{commitFiles.length}</span>
         </div>
         <div className="space-y-0.5">
-          {commitFiles.length === 0 && <div className="py-1 text-xs text-slate-500">No file list for this commit.</div>}
+          {commitFilesLoading && <div className="py-1 text-xs text-slate-500">Loading files...</div>}
+          {!commitFilesLoading && commitFiles.length === 0 && <div className="py-1 text-xs text-slate-500">No file list for this commit.</div>}
           {commitFiles.map(f => (
             <button
               className="flex h-7 w-full min-w-0 items-center gap-2 rounded px-2 text-left text-xs text-slate-300 hover:bg-slate-800"

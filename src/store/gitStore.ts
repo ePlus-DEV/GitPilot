@@ -38,6 +38,7 @@ type State = {
   remotes: RemoteInfo[];
   history: CommitInfo[];
   commitFiles: CommitFile[];
+  commitFilesLoading: boolean;
   stashes: StashInfo[];
   tags: TagInfo[];
   selectedFile?: GitFileStatus;
@@ -77,6 +78,7 @@ export const useGitStore = create<State>((set, get) => ({
   remotes: [],
   history: [],
   commitFiles: [],
+  commitFilesLoading: false,
   stashes: [],
   tags: [],
   settingsOpen: false,
@@ -177,11 +179,13 @@ export const useGitStore = create<State>((set, get) => ({
   selectCommit: async c => {
     const repo = get().repo;
     if (!repo) return;
-    set({ selectedCommit: c, commitFiles: [], selectedFile: undefined, diff: undefined, conflict: undefined });
+    set({ selectedCommit: c, commitFiles: [], commitFilesLoading: true, selectedFile: undefined, diff: undefined, conflict: undefined });
     try {
       set({ commitFiles: await gitService.getCommitFiles(repo.path, c.hash) });
     } catch (e) {
       get().log(String((e as Error).message ?? e));
+    } finally {
+      set({ commitFilesLoading: false });
     }
   },
 

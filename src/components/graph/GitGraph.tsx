@@ -11,6 +11,7 @@ const PAD_LEFT = 10;
 const OVERSCAN = 8;
 const MAX_VISIBLE_LANES = 10;
 const GRAPH_W = MAX_VISIBLE_LANES * LANE_W + PAD_LEFT * 2;
+const LOAD_MORE_H = 58;
 
 type RowData = {
   commit: CommitInfo;
@@ -110,20 +111,20 @@ const GraphRow = memo(function GraphRow({
       style={{ height: ROW_H }}
     >
       <div className="w-[200px] shrink-0 overflow-hidden">
-      <svg width={GRAPH_W} height={ROW_H} className="block overflow-hidden">
-        {visibleLines.map((ln, i) => {
-          const x1 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.fromLane)));
-          const x2 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.toLane)));
-          const y1 = ln.pos === 'bottom' ? cy : 0;
-          const y2 = ln.pos === 'top' ? cy : ROW_H;
-          return x1 === x2
-            ? <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={ln.color} strokeWidth={1.6} />
-            : <path key={i} d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`} fill="none" stroke={ln.color} strokeWidth={1.6} />;
-        })}
-        <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill={row.color} opacity={0.18} />
-        <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
-        {row.commit.head && <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill="none" stroke={row.color} strokeWidth={1.5} />}
-      </svg>
+        <svg width={GRAPH_W} height={ROW_H} className="block overflow-hidden">
+          {visibleLines.map((ln, i) => {
+            const x1 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.fromLane)));
+            const x2 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.toLane)));
+            const y1 = ln.pos === 'bottom' ? cy : 0;
+            const y2 = ln.pos === 'top' ? cy : ROW_H;
+            return x1 === x2
+              ? <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={ln.color} strokeWidth={1.6} />
+              : <path key={i} d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`} fill="none" stroke={ln.color} strokeWidth={1.6} />;
+          })}
+          <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill={row.color} opacity={0.18} />
+          <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
+          {row.commit.head && <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill="none" stroke={row.color} strokeWidth={1.5} />}
+        </svg>
       </div>
 
       <div className="min-w-0 flex flex-1 items-center gap-3 pr-3">
@@ -159,6 +160,7 @@ export function GitGraph() {
   const [viewportHeight, setViewportHeight] = useState(600);
   const listRef = useRef<HTMLDivElement | null>(null);
   const didMountRef = useRef(false);
+  const lastAutoScrolledHashRef = useRef<string | undefined>();
 
   useEffect(() => {
     if (!didMountRef.current) {
@@ -178,8 +180,7 @@ export function GitGraph() {
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
   const endIndex = Math.min(visibleRows.length, Math.ceil((scrollTop + viewportHeight) / ROW_H) + OVERSCAN);
   const renderedRows = visibleRows.slice(startIndex, endIndex);
-  const topSpacer = startIndex * ROW_H;
-  const bottomSpacer = Math.max(0, (visibleRows.length - endIndex) * ROW_H);
+  const totalListHeight = visibleRows.length * ROW_H + LOAD_MORE_H;
   const clear = () => { setSearch(''); setFilters({}); };
 
   useEffect(() => {
@@ -195,8 +196,10 @@ export function GitGraph() {
   useEffect(() => {
     const list = listRef.current;
     if (!list || !selectedCommit) return;
+    if (lastAutoScrolledHashRef.current === selectedCommit.hash) return;
     const idx = visibleRows.findIndex(row => row.commit.hash === selectedCommit.hash);
     if (idx === -1) return;
+    lastAutoScrolledHashRef.current = selectedCommit.hash;
     const rowTop = idx * ROW_H;
     const rowBottom = rowTop + ROW_H;
     if (rowTop < list.scrollTop) list.scrollTop = rowTop;
@@ -243,20 +246,24 @@ export function GitGraph() {
         </div>
       </div>
 
-      <div ref={listRef} className="min-h-0 flex-1 overflow-auto" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
-        {topSpacer > 0 && <div style={{ height: topSpacer }} />}
-        {renderedRows.map(row => (
-          <GraphRow
-            key={row.commit.hash}
-            row={row}
-            selected={selectedCommit?.hash === row.commit.hash}
-            onClick={() => void selectCommit(row.commit)}
-          />
-        ))}
-        {bottomSpacer > 0 && <div style={{ height: bottomSpacer }} />}
-        {visibleRows.length === 0 && <div className="p-6 text-center text-sm text-slate-500">No commits match the current filters.</div>}
-        <div className="border-t border-pilot-line p-3 text-center">
-          <button className="btn" onClick={() => void loadHistory(filters, historyLimit + 500)}>Load 500 more commits</button>
+      <div ref={listRef} className="min-h-0 flex-1 overflow-auto [overflow-anchor:none]" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
+        <div className="relative" style={{ height: totalListHeight }}>
+          {renderedRows.map((row, i) => {
+            const index = startIndex + i;
+            return (
+              <div key={row.commit.hash} className="absolute left-0 right-0" style={{ top: index * ROW_H, height: ROW_H }}>
+                <GraphRow
+                  row={row}
+                  selected={selectedCommit?.hash === row.commit.hash}
+                  onClick={() => void selectCommit(row.commit)}
+                />
+              </div>
+            );
+          })}
+          {visibleRows.length === 0 && <div className="p-6 text-center text-sm text-slate-500">No commits match the current filters.</div>}
+          <div className="absolute left-0 right-0 border-t border-pilot-line p-3 text-center" style={{ top: visibleRows.length * ROW_H, height: LOAD_MORE_H }}>
+            <button className="btn" onClick={() => void loadHistory(filters, historyLimit + 500)}>Load 500 more commits</button>
+          </div>
         </div>
       </div>
     </div>

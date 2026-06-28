@@ -96,22 +96,40 @@ pub fn get_commit_files(repo_path: String, commit: String) -> Result<Vec<CommitF
         &repo_path,
         &[
             "diff-tree",
-            "--no-commit-id",
+            "--root",
+            "-m",
             "--name-status",
+            "-z",
+            "--no-commit-id",
             "-r",
             &commit,
         ],
     )?;
-    Ok(out
-        .lines()
-        .filter_map(|l| {
-            let mut p = l.split_whitespace();
-            Some(CommitFile {
-                status: p.next()?.into(),
-                path: p.next()?.into(),
-            })
-        })
-        .collect())
+    let mut files = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut parts = out.split('\0').filter(|p| !p.is_empty());
+    while let Some(status) = parts.next() {
+        let Some(path) = parts.next() else {
+            break;
+        };
+        let path = if status.starts_with('R') || status.starts_with('C') {
+            parts.next().unwrap_or(path)
+        } else {
+            path
+        };
+        let display_status = status
+            .chars()
+            .next()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| status.to_string());
+        if seen.insert((display_status.clone(), path.to_string())) {
+            files.push(CommitFile {
+                status: display_status,
+                path: path.into(),
+            });
+        }
+    }
+    Ok(files)
 }
 #[tauri::command]
 pub fn compare_commits(repo_path: String, from: String, to: String) -> Result<String, GitError> {
