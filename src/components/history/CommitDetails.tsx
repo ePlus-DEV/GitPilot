@@ -19,8 +19,8 @@ export function CommitDetails() {
   const runCommitAction = (label: string, fn: () => Promise<unknown>) => repo && void run(label, fn);
 
   return (
-    <section className="flex min-h-full flex-col bg-[#0b1120]">
-      <div className="min-w-0 border-b border-pilot-line px-4 py-3">
+    <section className="flex min-h-0 flex-col bg-[#0b1120]">
+      <div className="min-w-0 shrink-0 border-b border-pilot-line px-4 py-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-pilot-blue">Information</h2>
           <span className="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-pilot-blue">{short}</span>
@@ -40,7 +40,7 @@ export function CommitDetails() {
         </div>
       </div>
 
-      <div className="border-b border-pilot-line px-4 py-3">
+      <div className="shrink-0 border-b border-pilot-line px-4 py-3">
         <div className="mb-2 flex flex-wrap gap-1.5">
           <button className="icon-btn accent" title="Create a branch at this commit" onClick={() => { const name = ask('New branch name', `branch-${short}`); if (name) runCommitAction('branch from commit', () => gitService.createBranchFromCommit(repo!, name, revision, true)); }}>
             <GitBranch size={12} /> Branch
@@ -69,12 +69,12 @@ export function CommitDetails() {
         </div>
       </div>
 
-      <div className="min-w-0 px-4 py-3">
+      <div className="min-h-0 min-w-0 flex-1 px-4 py-3">
         <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-slate-500">
           <span>Files</span>
           <span>{commitFilesLoading ? '...' : commitFiles.length}</span>
         </div>
-        <div className="max-h-56 space-y-0.5 overflow-auto">
+        <div className="max-h-56 min-h-0 space-y-0.5 overflow-auto">
           {commitFilesLoading && <div className="py-1 text-xs text-slate-500">Loading files...</div>}
           {commitFilesError && !commitFilesLoading && <div className="py-1 text-xs text-red-300">{commitFilesError}</div>}
           {!commitFilesLoading && !commitFilesError && commitFiles.length === 0 && <div className="py-1 text-xs text-slate-500">No file list for this commit.</div>}

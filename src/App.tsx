@@ -80,24 +80,26 @@ export function App() {
           className="w-1 shrink-0 cursor-col-resize bg-[#0d1324] hover:bg-pilot-blue/60"
           onMouseDown={startResize(event => setRightWidth(Math.min(640, Math.max(360, window.innerWidth - event.clientX))))}
         />
-        <aside className="relative flex min-h-0 shrink-0 flex-col bg-[#080d19]" style={{ width: rightWidth }}>
-          {changedCount > 0 && <StatusPanel />}
-          {selectedCommit && !conflict && (
-            <div className={`${diff ? 'max-h-[52%]' : 'flex-1'} min-h-0 shrink-0 overflow-auto border-b border-pilot-line bg-[#0b1120]`}>
-              <CommitDetails />
-            </div>
-          )}
-          {conflict ? <MergeResolver /> : diff ? <DiffViewer /> : null}
-          {!hasInspectorContent && (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-slate-500">
-              Select a commit or changed file to inspect it.
-            </div>
-          )}
-          {(changedCount > 0 || diff || aiText) && (
-          <div className="shrink-0 border-t border-pilot-line bg-pilot-panel">
-            <CommitPanel />
-            <AiPanel />
+        <aside className="relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-[#080d19]" style={{ width: rightWidth }}>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {changedCount > 0 && <StatusPanel />}
+            {selectedCommit && !conflict && (
+              <div className={`${diff ? 'basis-[42%]' : 'flex-1'} min-h-[180px] overflow-auto border-b border-pilot-line bg-[#0b1120]`}>
+                <CommitDetails />
+              </div>
+            )}
+            {conflict ? <MergeResolver /> : diff ? <DiffViewer /> : null}
+            {!hasInspectorContent && (
+              <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-slate-500">
+                Select a commit or changed file to inspect it.
+              </div>
+            )}
           </div>
+          {(changedCount > 0 || diff || aiText) && (
+            <div className="max-h-[32%] shrink-0 overflow-auto border-t border-pilot-line bg-pilot-panel">
+              <CommitPanel />
+              <AiPanel />
+            </div>
           )}
           {settingsOpen && <SettingsPanel />}
         </aside>
