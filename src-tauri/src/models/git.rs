@@ -172,3 +172,26 @@ pub struct SearchResult {
     pub subtitle: String,
     pub target: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReflogEntry {
+    pub selector: String,
+    pub commit: String,
+    pub subject: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmoduleInfo {
+    pub path: String,
+    pub commit: String,
+    pub branch: Option<String>,
+    pub status: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BisectState {
+    pub in_progress: bool,
+    pub current: Option<String>,
+    pub log: Vec<String>,
+}

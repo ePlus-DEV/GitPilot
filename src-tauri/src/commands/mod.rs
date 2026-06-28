@@ -3,6 +3,7 @@ pub mod branch;
 pub mod commit;
 pub mod diff;
 pub mod history;
+pub mod maintenance;
 pub mod merge;
 pub mod rebase;
 pub mod remote;

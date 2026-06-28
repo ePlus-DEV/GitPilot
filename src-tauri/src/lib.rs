@@ -8,6 +8,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::repository::validate_repository,
             commands::repository::open_repository,
+            commands::repository::init_repository,
+            commands::repository::clone_repository,
             commands::repository::list_recent_repositories,
             commands::repository::save_recent_repository,
             commands::repository::remove_recent_repository,
@@ -77,7 +79,14 @@ pub fn run() {
             commands::ai::suggest_branch_name,
             commands::ai::resolve_conflict_block,
             commands::settings::get_settings,
-            commands::settings::save_settings
+            commands::settings::save_settings,
+            commands::maintenance::list_reflog,
+            commands::maintenance::list_submodules,
+            commands::maintenance::update_submodules,
+            commands::maintenance::start_bisect,
+            commands::maintenance::mark_bisect,
+            commands::maintenance::reset_bisect,
+            commands::maintenance::get_bisect_state
         ])
         .run(tauri::generate_context!())
         .expect("failed to run GitPilot");
