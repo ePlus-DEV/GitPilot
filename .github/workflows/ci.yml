@@ -8,33 +8,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: read
   contents: read
-  issues: write
-  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            name: Linux
-            artifact: gitpilot-linux
-          - os: windows-latest
-            name: Windows
-            artifact: gitpilot-windows
-          - os: macos-latest
-            name: macOS
-            artifact: gitpilot-macos
-
+  validate:
+    name: PR validation
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -43,12 +26,12 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
+          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Linux dependencies for Tauri
-        if: runner.os == 'Linux'
+      - name: Install Linux dependencies for Tauri checks
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -74,6 +57,55 @@ jobs:
       - name: Check Tauri backend
         run: npm run tauri:check
 
+  package:
+    name: Package ${{ matrix.name }}
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux
+            artifact: gitpilot-linux
+          - os: windows-latest
+            name: Windows
+            artifact: gitpilot-windows
+          - os: macos-latest
+            name: macOS
+            artifact: gitpilot-macos
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
       - name: Build Tauri desktop app
         run: npm run tauri -- build
 
@@ -81,106 +113,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: |
-            src-tauri/target/release/bundle/**
+          path: src-tauri/target/release/bundle/**
           if-no-files-found: error
-
-  comment-artifacts:
-    name: Comment artifact download instructions
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && always() && needs.build.result == 'success'
-    steps:
-      - name: Comment on pull request
-        uses: actions/github-script@v8
-        continue-on-error: true
-        with:
-          script: |
-            const marker = '<!-- gitpilot-build-artifacts -->';
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
-            const artifactNames = ['gitpilot-windows', 'gitpilot-macos', 'gitpilot-linux'];
-
-            try {
-              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                owner,
-                repo,
-                run_id: context.runId,
-                per_page: 100,
-              });
-              const artifactByName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
-              const artifactLines = artifactNames.map((name) => {
-                const artifact = artifactByName.get(name);
-                const label = name.replace('gitpilot-', '');
-                if (!artifact) {
-                  return `- ${label}: \`${name}\` (open [workflow run](${runUrl}) to download)`;
-                }
-                const artifactUrl = `${runUrl}/artifacts/${artifact.id}`;
-                return `- ${label}: [\`${name}\`](${artifactUrl})`;
-              });
-
-              const body = [
-                marker,
-                '### GitPilot build artifacts are ready',
-                '',
-                `One CI workflow run built all 3 desktop apps: [open workflow run](${runUrl}).`,
-                '',
-                'Download links:',
-                '',
-                ...artifactLines,
-              ].join('\n');
-
-              const comments = await github.paginate(github.rest.issues.listComments, {
-                owner,
-                repo,
-                issue_number,
-                per_page: 100,
-              });
-              const existing = comments.find((comment) =>
-                comment.user?.type === 'Bot' && comment.body?.includes(marker)
-              );
-
-              if (existing) {
-                await github.rest.issues.updateComment({
-                  owner,
-                  repo,
-                  comment_id: existing.id,
-                  body,
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number,
-                  body,
-                });
-              }
-            } catch (error) {
-              if (error.status === 403) {
-                core.warning(`Skipping PR artifact comment because the workflow token cannot write comments: ${error.message}`);
-              } else {
-                throw error;
-              }
-            }
-
-  summarize-artifacts:
-    name: Summarize artifact downloads
-    needs: build
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Write summary
-        run: |
-          {
-            echo "### GitPilot desktop build artifacts"
-            echo
-            echo "This workflow builds GitPilot on Linux, Windows, and macOS and uploads the desktop bundles as artifacts."
-            echo
-            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            echo
-            echo "Download artifacts from that run:"
-            echo "- gitpilot-linux"
-            echo "- gitpilot-windows"
-            echo "- gitpilot-macos"
-          } >> "$GITHUB_STEP_SUMMARY"

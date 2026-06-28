@@ -22,3 +22,7 @@ export type RebaseState={inProgress:boolean;interactive:boolean;currentBranch?:s
 export type BlameLine={lineNumber:number;commit:string;author:string;timestamp:string;text:string};
 export type WorktreeInfo={path:string;head:string;branch?:string|null;bare:boolean;detached:boolean};
 export type SearchResult={kind:string;title:string;subtitle:string;target:string};
+
+export type ReflogEntry={selector:string;commit:string;subject:string};
+export type SubmoduleInfo={path:string;commit:string;branch?:string|null;status:string};
+export type BisectState={inProgress:boolean;current?:string|null;log:string[]};
