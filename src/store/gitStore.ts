@@ -54,6 +54,7 @@ type State = {
   historyLimit: number;
   historyFilters: HistoryFilters;
   openRepo: (path: string) => Promise<void>;
+  closeRepo: () => void;
   refresh: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   loadHistory: (filters?: HistoryFilters, limit?: number) => Promise<void>;
@@ -104,6 +105,25 @@ export const useGitStore = create<State>((set, get) => ({
       set({ busy: false });
     }
   },
+
+  closeRepo: () => set({
+    repo: undefined,
+    status: empty,
+    branches: [],
+    remotes: [],
+    history: [],
+    commitFiles: [],
+    commitFilesLoading: false,
+    stashes: [],
+    tags: [],
+    selectedFile: undefined,
+    selectedCommit: undefined,
+    diff: undefined,
+    conflict: undefined,
+    aiText: '',
+    busy: false,
+    historyFilters: {},
+  }),
 
   refresh: async () => {
     const repo = get().repo;

@@ -4,14 +4,15 @@ import { useGitStore } from '../../store/gitStore';
 import type { CommitInfo, HistoryFilters } from '../../types/git';
 
 const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
-const ROW_H = 34;
-const LANE_W = 18;
+const ROW_H = 36;
+const LANE_W = 13;
 const CIRCLE_R = 4;
-const PAD_LEFT = 10;
+const PAD_LEFT = 8;
 const OVERSCAN = 8;
-const MAX_VISIBLE_LANES = 10;
+const MAX_VISIBLE_LANES = 4;
 const GRAPH_W = MAX_VISIBLE_LANES * LANE_W + PAD_LEFT * 2;
 const LOAD_MORE_H = 58;
+const HISTORY_GRID = 'grid-cols-[minmax(360px,1fr)_170px_110px_140px]';
 
 type RowData = {
   commit: CommitInfo;
@@ -106,43 +107,48 @@ const GraphRow = memo(function GraphRow({
 
   return (
     <button
+      type="button"
+      draggable={false}
+      onMouseDown={e => e.preventDefault()}
       onClick={onClick}
-      className={`flex w-full items-center border-t border-pilot-line text-left transition-colors hover:bg-slate-800/60 ${selected ? 'bg-slate-800 ring-1 ring-inset ring-sky-500/40' : ''}`}
+      className={`grid w-full select-none ${HISTORY_GRID} items-center border-t border-pilot-line text-left transition-colors hover:bg-slate-800/60 ${selected ? 'bg-sky-600 text-white hover:bg-sky-600' : 'text-slate-200'}`}
       style={{ height: ROW_H }}
     >
-      <div className="w-[200px] shrink-0 overflow-hidden">
-        <svg width={GRAPH_W} height={ROW_H} className="block overflow-hidden">
-          {visibleLines.map((ln, i) => {
-            const x1 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.fromLane)));
-            const x2 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.toLane)));
-            const y1 = ln.pos === 'bottom' ? cy : 0;
-            const y2 = ln.pos === 'top' ? cy : ROW_H;
-            return x1 === x2
-              ? <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={ln.color} strokeWidth={1.6} />
-              : <path key={i} d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`} fill="none" stroke={ln.color} strokeWidth={1.6} />;
-          })}
-          <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill={row.color} opacity={0.18} />
-          <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
-          {row.commit.head && <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill="none" stroke={row.color} strokeWidth={1.5} />}
-        </svg>
+      <div className="flex min-w-0 items-center">
+        <div className="w-16 shrink-0 overflow-hidden">
+          <svg width={GRAPH_W} height={ROW_H} className="block overflow-hidden">
+            {visibleLines.map((ln, i) => {
+              const x1 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.fromLane)));
+              const x2 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.toLane)));
+              const y1 = ln.pos === 'bottom' ? cy : 0;
+              const y2 = ln.pos === 'top' ? cy : ROW_H;
+              return x1 === x2
+                ? <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={ln.color} strokeWidth={1.8} />
+                : <path key={i} d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`} fill="none" stroke={ln.color} strokeWidth={1.8} />;
+            })}
+            <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill={row.color} opacity={0.16} />
+            <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
+            {row.commit.head && <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill="none" stroke={row.color} strokeWidth={1.5} />}
+          </svg>
+        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 pr-3">
+          {row.commit.refs.slice(0, 3).map(ref => (
+            <span key={ref} className={`shrink-0 rounded px-1.5 py-0 text-[10px] font-semibold ${selected ? 'bg-white/20 text-white' : ref.includes('origin') ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
+              {ref.replace('HEAD -> ', '').replace('tag: ', '')}
+            </span>
+          ))}
+          <span className={`truncate text-sm ${selected ? 'text-white' : 'text-slate-100'}`}>{row.commit.message}</span>
+        </div>
       </div>
 
-      <div className="min-w-0 flex flex-1 items-center gap-3 pr-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {row.commit.refs.slice(0, 5).map(ref => (
-              <span key={ref} className="shrink-0 rounded border border-sky-400/30 bg-sky-400/10 px-1 py-0 text-[9px] font-semibold text-sky-300">
-                {ref.replace('HEAD -> ', '').replace('tag: ', '')}
-              </span>
-            ))}
-            <span className="truncate text-xs text-slate-200">{row.commit.message}</span>
-          </div>
-          <div className="mt-0.5 truncate text-[10px] text-slate-500">
-            {row.commit.shortHash} - {row.commit.author} - {row.commit.date}
-          </div>
-        </div>
-        {row.commit.parents.length > 1 && <span className="rounded bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-300">merge</span>}
+      <div className="flex min-w-0 items-center gap-2 px-3">
+        <span className={`h-5 w-5 shrink-0 rounded bg-slate-700 text-center text-[10px] font-semibold leading-5 ${selected ? 'text-white' : 'text-slate-300'}`}>
+          {row.commit.author.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="truncate text-sm">{row.commit.author}</span>
       </div>
+      <div className="truncate px-3 font-mono text-sm">{row.commit.shortHash}</div>
+      <div className="truncate px-3 text-sm">{row.commit.date}</div>
     </button>
   );
 });
@@ -246,15 +252,22 @@ export function GitGraph() {
         </div>
       </div>
 
-      <div ref={listRef} className="min-h-0 flex-1 overflow-auto [overflow-anchor:none]" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
+      <div ref={listRef} className="min-h-0 flex-1 select-none overflow-auto [overflow-anchor:none]" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
+        <div className={`sticky top-0 z-10 grid select-none ${HISTORY_GRID} border-b border-pilot-line bg-[#20262a] text-[11px] font-bold uppercase tracking-wide text-slate-400`}>
+          <div className="px-16 py-2">Graph & Subject</div>
+          <div className="border-l border-pilot-line px-3 py-2">Author</div>
+          <div className="border-l border-pilot-line px-3 py-2">SHA</div>
+          <div className="border-l border-pilot-line px-3 py-2">Commit Time</div>
+        </div>
         <div className="relative" style={{ height: totalListHeight }}>
           {renderedRows.map((row, i) => {
             const index = startIndex + i;
+            const selected = Boolean(selectedCommit?.hash && row.commit.hash && selectedCommit.hash === row.commit.hash);
             return (
-              <div key={row.commit.hash} className="absolute left-0 right-0" style={{ top: index * ROW_H, height: ROW_H }}>
+              <div key={`${row.commit.hash || row.commit.shortHash}-${index}`} className="absolute left-0 right-0" style={{ top: index * ROW_H, height: ROW_H }}>
                 <GraphRow
                   row={row}
-                  selected={selectedCommit?.hash === row.commit.hash}
+                  selected={selected}
                   onClick={() => void selectCommit(row.commit)}
                 />
               </div>

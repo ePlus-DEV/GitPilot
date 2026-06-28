@@ -4,6 +4,11 @@ import type {AiResponse,BranchInfo,CommitFile,CommitInfo,DiffResult,GitCommandOu
 
 const isTauriRuntime=()=>typeof window!=='undefined'&&'__TAURI_INTERNALS__' in window;
 const demoSettings={theme:'dark',gitPath:'git',defaultTargetBranch:'main',recentRepositories:[demoRepo.path],aiProvider:'ollama',aiApiKey:'',aiModel:'',validationCommands:[],shortcuts:[]};
+const demoCommitFiles:CommitFile[]=[
+ {status:'M',path:'src/App.tsx'},
+ {status:'M',path:'src/components/graph/GitGraph.tsx'},
+ {status:'M',path:'src-tauri/src/commands/history.rs'},
+];
 const demoCall=<T>(cmd:string,args:Record<string,unknown>={}):Promise<T>=>{
  switch(cmd){
   case 'get_settings': return Promise.resolve(demoSettings as T);
@@ -18,7 +23,7 @@ const demoCall=<T>(cmd:string,args:Record<string,unknown>={}):Promise<T>=>{
   case 'get_history': return Promise.resolve(demoHistory as T);
   case 'list_stashes': return Promise.resolve([] as T);
   case 'list_tags': return Promise.resolve([] as T);
-  case 'get_commit_files': return Promise.resolve([] as T);
+  case 'get_commit_files': return Promise.resolve(demoCommitFiles as T);
   default: return Promise.reject(new Error(`Demo mode does not implement ${cmd}. Open the Tauri app for write operations.`));
  }
 };

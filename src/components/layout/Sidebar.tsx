@@ -12,9 +12,19 @@ export function Sidebar() {
   const stashes = useGitStore(s => s.stashes);
   const mergeState = useGitStore(s => s.status.mergeState);
   const openRepo = useGitStore(s => s.openRepo);
+  const closeRepo = useGitStore(s => s.closeRepo);
   const run = useGitStore(s => s.run);
   const [newBranch, setNewBranch] = useState('');
   const repo = repoInfo?.path;
+
+  const removeRecent = async (path: string) => {
+    const nextRecent = await gitService.removeRecentRepository(path);
+    useGitStore.setState({ recent: nextRecent });
+    if (repoInfo?.path !== path) return;
+    const nextRepo = nextRecent.find(r => r !== path);
+    if (nextRepo) void openRepo(nextRepo);
+    else closeRepo();
+  };
 
   return (
     <aside className="w-60 shrink-0 flex flex-col overflow-hidden border-r border-pilot-line bg-[#0a0f1e]">
@@ -31,7 +41,7 @@ export function Sidebar() {
                 title={r}
                 onClick={() => void openRepo(r)}
                 active={repoInfo?.path === r}
-                onDelete={() => void gitService.removeRecentRepository(r).then(recent => useGitStore.setState({ recent }))}
+                onDelete={() => void removeRecent(r)}
               />
             ))
           }
@@ -198,7 +208,10 @@ function SidebarRow({
           <button
             className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200"
             title={actionTitle}
-            onClick={onAction}
+            onClick={e => {
+              e.stopPropagation();
+              onAction();
+            }}
           >
             {actionIcon}
           </button>
@@ -207,7 +220,10 @@ function SidebarRow({
           <button
             className="p-0.5 rounded hover:bg-red-900/60 text-slate-400 hover:text-red-400"
             title="Delete"
-            onClick={onDelete}
+            onClick={e => {
+              e.stopPropagation();
+              onDelete();
+            }}
           >
             <Trash2 size={11} />
           </button>

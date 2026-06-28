@@ -21,7 +21,8 @@ export function App() {
   useEffect(() => {
     void gitService.getSettings().then(settings => {
       useGitStore.setState({ settings, recent: settings.recentRepositories });
-      if (!('__TAURI_INTERNALS__' in window) && settings.recentRepositories[0]) void useGitStore.getState().openRepo(settings.recentRepositories[0]);
+      const state = useGitStore.getState();
+      if (!state.repo && settings.recentRepositories[0]) void state.openRepo(settings.recentRepositories[0]);
     });
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
