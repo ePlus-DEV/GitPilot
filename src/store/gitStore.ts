@@ -202,20 +202,22 @@ export const useGitStore = create<State>((set, get) => ({
   selectCommit: async c => {
     const repo = get().repo;
     if (!repo) return;
-    if (!c.hash.trim()) {
+    const hash = c.hash.trim() || c.shortHash.trim();
+    if (!hash) {
       get().log('Cannot load commit details: empty commit hash.');
       return;
     }
-    set({ selectedCommit: c, commitFiles: [], commitFilesLoading: true, commitFilesError: undefined, selectedFile: undefined, diff: undefined, conflict: undefined });
+    const commit = { ...c, hash };
+    set({ selectedCommit: commit, commitFiles: [], commitFilesLoading: true, commitFilesError: undefined, selectedFile: undefined, diff: undefined, conflict: undefined });
     try {
-      const files = await gitService.getCommitFiles(repo.path, c.hash);
-      if (get().selectedCommit?.hash === c.hash) set({ commitFiles: files });
+      const files = await gitService.getCommitFiles(repo.path, hash);
+      if (get().selectedCommit?.hash === hash) set({ commitFiles: files });
     } catch (e) {
       const message = String((e as Error).message ?? e);
-      if (get().selectedCommit?.hash === c.hash) set({ commitFilesError: message });
+      if (get().selectedCommit?.hash === hash) set({ commitFilesError: message });
       get().log(message);
     } finally {
-      if (get().selectedCommit?.hash === c.hash) set({ commitFilesLoading: false });
+      if (get().selectedCommit?.hash === hash) set({ commitFilesLoading: false });
     }
   },
 

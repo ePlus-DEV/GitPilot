@@ -65,14 +65,24 @@ pub fn get_history(
     Ok(out
         .lines()
         .filter_map(|l| {
-            let graph: String = l.chars().take_while(|c| *c != '\x1f').collect();
-            let rest = &l[graph.len()..];
-            let p: Vec<_> = rest.trim_start().split('\x1f').collect();
+            let p: Vec<_> = l.splitn(7, '\x1f').collect();
             if p.len() < 7 {
                 return None;
             }
+            let graph_and_hash = p[0].trim_end();
+            let (graph, hash) = if let Some(idx) = graph_and_hash.rfind(char::is_whitespace) {
+                (
+                    graph_and_hash[..idx].to_string(),
+                    graph_and_hash[idx..].trim().to_string(),
+                )
+            } else {
+                (String::new(), graph_and_hash.trim().to_string())
+            };
+            if hash.is_empty() {
+                return None;
+            }
             Some(CommitInfo {
-                hash: p[0].into(),
+                hash,
                 short_hash: p[1].into(),
                 parents: p[2].split_whitespace().map(|s| s.into()).collect(),
                 author: p[3].into(),

@@ -14,6 +14,7 @@ export function CommitDetails() {
   if (!commit) return null;
 
   const short = commit.shortHash;
+  const revision = commit.hash.trim() || commit.shortHash.trim();
   const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
   const runCommitAction = (label: string, fn: () => Promise<unknown>) => repo && void run(label, fn);
 
@@ -81,9 +82,9 @@ export function CommitDetails() {
               key={`${f.status}-${f.path}`}
               title={f.path}
               onClick={() => {
-                if (!repo || !commit.hash.trim() || !f.path.trim()) return;
+                if (!repo || !revision || !f.path.trim()) return;
                 gitService
-                  .getCommitFileDiff(repo, commit.hash, f.path)
+                  .getCommitFileDiff(repo, revision, f.path)
                   .then(diff => useGitStore.setState({ diff }))
                   .catch(e => log(String((e as Error).message ?? e)));
               }}

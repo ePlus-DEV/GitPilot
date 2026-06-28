@@ -1,6 +1,9 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { Filter, GitCommitHorizontal, Search, X } from 'lucide-react';
+import { ContextMenu } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
+import { gitService } from '../../services/gitService';
 import type { CommitInfo, HistoryFilters } from '../../types/git';
 
 const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
@@ -93,10 +96,12 @@ const GraphRow = memo(function GraphRow({
   row,
   selected,
   onClick,
+  onContextMenu,
 }: {
   row: RowData;
   selected: boolean;
   onClick: () => void;
+  onContextMenu: (event: ReactMouseEvent) => void;
 }) {
   const cy = ROW_H / 2;
   const laneOffset = Math.max(0, Math.min(row.lane - Math.floor(MAX_VISIBLE_LANES / 2), row.maxLane - MAX_VISIBLE_LANES + 1));
@@ -111,6 +116,7 @@ const GraphRow = memo(function GraphRow({
       draggable={false}
       onMouseDown={e => e.preventDefault()}
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={`grid w-full select-none ${HISTORY_GRID} items-center border-t border-pilot-line text-left transition-colors hover:bg-slate-800/60 ${selected ? 'bg-sky-600 text-white hover:bg-sky-600' : 'text-slate-200'}`}
       style={{ height: ROW_H }}
     >
@@ -154,16 +160,19 @@ const GraphRow = memo(function GraphRow({
 });
 
 export function GitGraph() {
+  const repo = useGitStore(s => s.repo?.path);
   const history = useGitStore(s => s.history);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const selectCommit = useGitStore(s => s.selectCommit);
   const historyLimit = useGitStore(s => s.historyLimit);
   const historyFilters = useGitStore(s => s.historyFilters);
   const loadHistory = useGitStore(s => s.loadHistory);
+  const run = useGitStore(s => s.run);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<HistoryFilters>(historyFilters);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
+  const [menu, setMenu] = useState<{ x: number; y: number; commit: CommitInfo }>();
   const listRef = useRef<HTMLDivElement | null>(null);
   const didMountRef = useRef(false);
   const lastAutoScrolledHashRef = useRef<string | undefined>();
@@ -188,6 +197,13 @@ export function GitGraph() {
   const renderedRows = visibleRows.slice(startIndex, endIndex);
   const totalListHeight = visibleRows.length * ROW_H + LOAD_MORE_H;
   const clear = () => { setSearch(''); setFilters({}); };
+  const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
+  const commitRevision = (commit: CommitInfo) => commit.hash.trim() || commit.shortHash.trim();
+  const runCommitAction = (label: string, commit: CommitInfo, fn: (revision: string) => Promise<unknown>) => {
+    const revision = commitRevision(commit);
+    if (!repo || !revision) return;
+    void run(label, () => fn(revision));
+  };
 
   useEffect(() => {
     const list = listRef.current;
@@ -262,13 +278,18 @@ export function GitGraph() {
         <div className="relative" style={{ height: totalListHeight }}>
           {renderedRows.map((row, i) => {
             const index = startIndex + i;
-            const selected = Boolean(selectedCommit?.hash && row.commit.hash && selectedCommit.hash === row.commit.hash);
+            const selected = Boolean(selectedCommit?.hash && selectedCommit.hash === commitRevision(row.commit));
             return (
               <div key={`${row.commit.hash || row.commit.shortHash}-${index}`} className="absolute left-0 right-0" style={{ top: index * ROW_H, height: ROW_H }}>
                 <GraphRow
                   row={row}
                   selected={selected}
                   onClick={() => void selectCommit(row.commit)}
+                  onContextMenu={event => {
+                    event.preventDefault();
+                    void selectCommit(row.commit);
+                    setMenu({ x: event.clientX, y: event.clientY, commit: row.commit });
+                  }}
                 />
               </div>
             );
@@ -279,6 +300,66 @@ export function GitGraph() {
           </div>
         </div>
       </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          title={menu.commit.shortHash}
+          onClose={() => setMenu(undefined)}
+          items={[
+            {
+              label: 'Create branch here',
+              action: () => {
+                const name = ask('New branch name', `branch-${menu.commit.shortHash}`);
+                if (name) runCommitAction('branch from commit', menu.commit, revision => gitService.createBranchFromCommit(repo!, name, revision, true));
+              },
+            },
+            {
+              label: 'Create tag here',
+              action: () => {
+                const name = ask('New tag name', `tag-${menu.commit.shortHash}`);
+                if (name) runCommitAction('tag commit', menu.commit, revision => gitService.createTagFromCommit(repo!, name, revision));
+              },
+            },
+            {
+              label: 'Cherry-pick commit',
+              action: () => runCommitAction('cherry-pick', menu.commit, revision => gitService.cherryPickCommit(repo!, revision)),
+            },
+            {
+              label: 'Revert commit',
+              danger: true,
+              action: () => {
+                if (confirm(`Revert ${menu.commit.shortHash}?`)) runCommitAction('revert commit', menu.commit, revision => gitService.revertCommit(repo!, revision));
+              },
+            },
+            {
+              label: 'Checkout commit',
+              action: () => {
+                if (confirm(`Checkout ${menu.commit.shortHash} in detached HEAD?`)) runCommitAction('checkout commit', menu.commit, revision => gitService.checkoutCommit(repo!, revision));
+              },
+            },
+            {
+              label: 'Reset current branch: soft',
+              action: () => {
+                if (confirm(`Soft reset current branch to ${menu.commit.shortHash}?`)) runCommitAction('soft reset', menu.commit, revision => gitService.resetToCommit(repo!, revision, 'soft'));
+              },
+            },
+            {
+              label: 'Reset current branch: mixed',
+              action: () => {
+                if (confirm(`Mixed reset current branch to ${menu.commit.shortHash}?`)) runCommitAction('mixed reset', menu.commit, revision => gitService.resetToCommit(repo!, revision, 'mixed'));
+              },
+            },
+            {
+              label: 'Reset current branch: hard',
+              danger: true,
+              action: () => {
+                if (confirm(`Hard reset current branch to ${menu.commit.shortHash}? This can discard work.`)) runCommitAction('hard reset', menu.commit, revision => gitService.resetToCommit(repo!, revision, 'hard'));
+              },
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

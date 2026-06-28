@@ -65,11 +65,13 @@ pub fn get_commit_file_diff(
         ],
     )?
     .stdout;
+    let old_text = show(&repo_path, &format!("{commit}^:{file_path}"));
+    let new_text = show(&repo_path, &format!("{commit}:{file_path}"));
     Ok(DiffResult {
         file_path: file_path.to_string(),
-        old_text: String::new(),
-        new_text: String::new(),
-        binary: patch.contains("Binary files"),
+        old_text,
+        new_text,
+        binary: patch.contains("Binary files") || patch.contains("GIT binary patch"),
         cached: false,
         patch,
     })

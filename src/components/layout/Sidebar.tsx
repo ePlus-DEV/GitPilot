@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { Archive, FolderGit2, GitBranch, GitMerge, Globe, Plus, RotateCcw, Tag, Trash2 } from 'lucide-react';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
+import type { BranchInfo } from '../../types/git';
 
 export function Sidebar() {
   const recent = useGitStore(s => s.recent);
@@ -15,6 +17,7 @@ export function Sidebar() {
   const closeRepo = useGitStore(s => s.closeRepo);
   const run = useGitStore(s => s.run);
   const [newBranch, setNewBranch] = useState('');
+  const [branchMenu, setBranchMenu] = useState<{ x: number; y: number; branch: BranchInfo }>();
   const repo = repoInfo?.path;
 
   const removeRecent = async (path: string) => {
@@ -24,6 +27,66 @@ export function Sidebar() {
     const nextRepo = nextRecent.find(r => r !== path);
     if (nextRepo) void openRepo(nextRepo);
     else closeRepo();
+  };
+  const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
+  const branchRef = (branch: BranchInfo) => branch.name.replace(/^remotes\//, '');
+  const branchDisplay = (branch: BranchInfo, remote?: string) => {
+    const ref = branchRef(branch);
+    return remote && ref.startsWith(remote + '/') ? ref.slice(remote.length + 1) : ref;
+  };
+  const branchMenuItems = (branch: BranchInfo): ContextMenuItem[] => {
+    const ref = branchRef(branch);
+    const remoteName = remotes[0]?.name ?? 'origin';
+    const canWriteLocal = !branch.remote;
+    return [
+      {
+        label: 'Checkout branch',
+        action: () => repo && void run('checkout', () => gitService.checkoutBranch(repo, ref)),
+      },
+      {
+        label: 'Merge into current branch',
+        action: () => {
+          if (confirm(`Merge ${ref} into current branch?`)) repo && void run('merge branch', () => gitService.mergeBranch(repo, ref));
+        },
+      },
+      {
+        label: 'Compare with HEAD',
+        action: () => repo && void run('compare branch', () => gitService.compareBranch(repo, ref), 'none'),
+      },
+      {
+        label: 'Rename branch',
+        disabled: !canWriteLocal,
+        action: () => {
+          const next = ask('New branch name', branch.name);
+          if (next && repo) void run('rename branch', () => gitService.renameBranch(repo, branch.name, next));
+        },
+      },
+      {
+        label: `Push to ${remoteName}`,
+        disabled: !canWriteLocal,
+        action: () => repo && void run('push branch', () => gitService.pushNewBranch(repo, remoteName, branch.name)),
+      },
+      {
+        label: `Fetch ${remoteName}`,
+        action: () => repo && void run('fetch', () => gitService.fetch(repo, remoteName)),
+      },
+      {
+        label: 'Delete branch',
+        danger: true,
+        disabled: !canWriteLocal || branch.current,
+        action: () => {
+          if (confirm(`Delete ${branch.name}?`)) repo && void run('delete branch', () => gitService.deleteBranch(repo, branch.name, false));
+        },
+      },
+      {
+        label: 'Force delete branch',
+        danger: true,
+        disabled: !canWriteLocal || branch.current,
+        action: () => {
+          if (confirm(`Force delete ${branch.name}? This can discard unmerged commits.`)) repo && void run('force delete branch', () => gitService.deleteBranch(repo, branch.name, true));
+        },
+      },
+    ];
   };
 
   return (
@@ -80,6 +143,10 @@ export function Sidebar() {
               icon={b.current ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-pilot-blue" /> : undefined}
               onClick={() => repo && void run('checkout', () => gitService.checkoutBranch(repo, b.name))}
               onDelete={() => repo && void run('delete branch', () => gitService.deleteBranch(repo, b.name, false))}
+              onContextMenu={event => {
+                event.preventDefault();
+                setBranchMenu({ x: event.clientX, y: event.clientY, branch: b });
+              }}
               meta={b.ahead || b.behind ? `up ${b.ahead} down ${b.behind}` : undefined}
             />
           ))}
@@ -89,11 +156,15 @@ export function Sidebar() {
           {remotes.map(r => (
             <div key={r.name}>
               <div className="px-3 py-1 text-[11px] font-semibold text-slate-400">{r.name}</div>
-              {branches.filter(b => b.remote && b.name.startsWith(r.name + '/')).map(b => (
+              {branches.filter(b => b.remote && branchRef(b).startsWith(r.name + '/')).map(b => (
                 <SidebarRow
                   key={b.name}
-                  label={b.name.replace(r.name + '/', '')}
-                  onClick={() => repo && void run('checkout', () => gitService.checkoutBranch(repo, b.name))}
+                  label={branchDisplay(b, r.name)}
+                  onClick={() => repo && void run('checkout', () => gitService.checkoutBranch(repo, branchRef(b)))}
+                  onContextMenu={event => {
+                    event.preventDefault();
+                    setBranchMenu({ x: event.clientX, y: event.clientY, branch: b });
+                  }}
                 />
               ))}
             </div>
@@ -147,6 +218,15 @@ export function Sidebar() {
           </div>
         </div>
       )}
+      {branchMenu && (
+        <ContextMenu
+          x={branchMenu.x}
+          y={branchMenu.y}
+          title={branchRef(branchMenu.branch)}
+          items={branchMenuItems(branchMenu.branch)}
+          onClose={() => setBranchMenu(undefined)}
+        />
+      )}
     </aside>
   );
 }
@@ -169,7 +249,7 @@ function Section({ title, icon, children }: { title: string; icon?: ReactNode; c
 }
 
 function SidebarRow({
-  label, title, active, icon, meta, onClick, onDelete, onAction, actionIcon, actionTitle,
+  label, title, active, icon, meta, onClick, onContextMenu, onDelete, onAction, actionIcon, actionTitle,
 }: {
   label: string;
   title?: string;
@@ -177,13 +257,17 @@ function SidebarRow({
   icon?: ReactNode;
   meta?: string;
   onClick?: () => void;
+  onContextMenu?: (event: ReactMouseEvent) => void;
   onDelete?: () => void;
   onAction?: () => void;
   actionIcon?: ReactNode;
   actionTitle?: string;
 }) {
   return (
-    <div className={`group flex cursor-default items-center gap-1.5 rounded-none px-3 py-1 hover:bg-slate-800/60 ${active ? 'bg-slate-800/80' : ''}`}>
+    <div
+      className={`group flex cursor-default items-center gap-1.5 rounded-none px-3 py-1 hover:bg-slate-800/60 ${active ? 'bg-slate-800/80' : ''}`}
+      onContextMenu={onContextMenu}
+    >
       {icon}
       <button
         className={`min-w-0 flex-1 truncate text-left text-[12px] ${active ? 'font-semibold text-pilot-blue' : 'text-slate-300'}`}
