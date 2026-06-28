@@ -1,4 +1,4 @@
-import Editor, { DiffEditor } from '@monaco-editor/react';
+import { PatchDiff } from '@pierre/diffs/react';
 import { Columns2, Maximize2, Minimize2, Rows3 } from 'lucide-react';
 import { useState } from 'react';
 import { useGitStore } from '../../store/gitStore';
@@ -7,8 +7,8 @@ export function DiffViewer() {
   const diff = useGitStore(s => s.diff);
   const [mode, setMode] = useState<'side' | 'inline'>('side');
   const [expanded, setExpanded] = useState(false);
-  const canShowSplit = Boolean(diff?.oldText || diff?.newText);
-  const viewMode = canShowSplit ? mode : 'inline';
+  const canShowSplit = Boolean(diff?.patch || diff?.oldText || diff?.newText);
+  const viewMode = mode === 'side' ? 'split' : 'unified';
 
   if (!diff) {
     return (
@@ -27,24 +27,28 @@ export function DiffViewer() {
   }
 
   const renderEditor = () => (
-    <div className="min-h-0 flex-1">
-      {viewMode === 'side' ? (
-        <DiffEditor
-          height="100%"
-          theme="vs-dark"
-          original={diff.oldText}
-          modified={diff.newText}
-          language={language(diff.filePath)}
-          options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, scrollBeyondLastLine: false }}
+    <div className="min-h-0 flex-1 overflow-auto bg-[#0b1020]">
+      {diff.patch ? (
+        <PatchDiff
+          key={`${diff.filePath}-${viewMode}`}
+          patch={diff.patch}
+          disableWorkerPool
+          className="min-h-full text-xs"
+          options={{
+            diffStyle: viewMode,
+            theme: 'github-dark',
+            themeType: 'dark',
+            overflow: 'wrap',
+            lineDiffType: 'word',
+            diffIndicators: 'bars',
+            hunkSeparators: 'line-info-basic',
+            stickyHeader: true,
+          }}
         />
       ) : (
-        <Editor
-          height="100%"
-          theme="vs-dark"
-          value={diff.patch || 'No textual diff available.'}
-          language="diff"
-          options={{ readOnly: true, wordWrap: 'on', minimap: { enabled: false }, scrollBeyondLastLine: false }}
-        />
+        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-500">
+          No textual diff available.
+        </div>
       )}
     </div>
   );
@@ -90,13 +94,4 @@ export function DiffViewer() {
       )}
     </>
   );
-}
-
-function language(p: string) {
-  if (p.endsWith('.ts') || p.endsWith('.tsx')) return 'typescript';
-  if (p.endsWith('.js') || p.endsWith('.jsx')) return 'javascript';
-  if (p.endsWith('.rs')) return 'rust';
-  if (p.endsWith('.php')) return 'php';
-  if (p.endsWith('.json')) return 'json';
-  return 'plaintext';
 }

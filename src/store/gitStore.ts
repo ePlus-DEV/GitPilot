@@ -95,7 +95,23 @@ export const useGitStore = create<State>((set, get) => ({
   log: m => set(s => ({ console: [m, ...s.console].slice(0, 100) })),
 
   openRepo: async path => {
-    set({ busy: true });
+    set({
+      busy: true,
+      status: empty,
+      branches: [],
+      remotes: [],
+      history: [],
+      commitFiles: [],
+      commitFilesLoading: false,
+      commitFilesError: undefined,
+      stashes: [],
+      tags: [],
+      selectedFile: undefined,
+      selectedCommit: undefined,
+      diff: undefined,
+      conflict: undefined,
+      aiText: '',
+    });
     try {
       const repo = await gitService.openRepository(path);
       await gitService.saveRecentRepository(path);

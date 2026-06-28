@@ -19,8 +19,7 @@ export function App() {
   const conflict = useGitStore(s => s.conflict);
   const settingsOpen = useGitStore(s => s.settingsOpen);
   const [sidebarWidth, setSidebarWidth] = useState(240);
-  const [rightWidth, setRightWidth] = useState(390);
-  const [detailsHeight, setDetailsHeight] = useState(250);
+  const [rightWidth, setRightWidth] = useState(430);
   const [consoleHeight, setConsoleHeight] = useState(144);
 
   useEffect(() => {
@@ -70,23 +69,19 @@ export function App() {
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-[#090e1b]">
           <GitGraph />
-          {selectedCommit && (
-            <div className="relative shrink-0 overflow-auto border-t border-pilot-line bg-[#0b1120]" style={{ height: detailsHeight }}>
-              <div
-                className="sticky top-0 z-10 h-1 cursor-row-resize bg-pilot-line hover:bg-pilot-blue"
-                onMouseDown={startResize(event => setDetailsHeight(Math.min(420, Math.max(170, window.innerHeight - event.clientY - 42))))}
-              />
-              <CommitDetails />
-            </div>
-          )}
         </main>
 
         <div
           className="w-1 shrink-0 cursor-col-resize bg-[#0d1324] hover:bg-pilot-blue/60"
-          onMouseDown={startResize(event => setRightWidth(Math.min(560, Math.max(320, window.innerWidth - event.clientX))))}
+          onMouseDown={startResize(event => setRightWidth(Math.min(640, Math.max(360, window.innerWidth - event.clientX))))}
         />
         <aside className="relative flex min-h-0 shrink-0 flex-col bg-[#080d19]" style={{ width: rightWidth }}>
           <StatusPanel />
+          {selectedCommit && !conflict && (
+            <div className="max-h-[45%] shrink-0 overflow-auto border-b border-pilot-line bg-[#0b1120]">
+              <CommitDetails />
+            </div>
+          )}
           {conflict ? <MergeResolver /> : <DiffViewer />}
           <div className="shrink-0 border-t border-pilot-line bg-pilot-panel">
             <CommitPanel />

@@ -19,60 +19,62 @@ export function CommitDetails() {
   const runCommitAction = (label: string, fn: () => Promise<unknown>) => repo && void run(label, fn);
 
   return (
-    <section className="grid min-h-full grid-cols-[minmax(0,1fr)_340px] bg-[#0b1120]">
-      <div className="min-w-0 border-r border-pilot-line px-4 py-3">
-        <div className="mb-1 flex items-center justify-between gap-2">
+    <section className="flex min-h-full flex-col bg-[#0b1120]">
+      <div className="min-w-0 border-b border-pilot-line px-4 py-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-pilot-blue">Information</h2>
           <span className="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-pilot-blue">{short}</span>
         </div>
 
-        <div className="break-words text-sm font-semibold leading-snug text-slate-100">{commit.message}</div>
+        <div className="break-words text-base font-semibold leading-snug text-slate-100">{commit.message}</div>
 
-        <div className="mt-2 grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[11px]">
-          <span className="text-right font-semibold uppercase text-slate-500">Author</span>
+        <div className="mt-3 grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[11px]">
+          <span className="font-semibold uppercase text-slate-500">Author</span>
           <span className="truncate text-slate-300">{commit.author}</span>
-          <span className="text-right font-semibold uppercase text-slate-500">Date</span>
+          <span className="font-semibold uppercase text-slate-500">Date</span>
           <span className="truncate text-slate-300">{commit.date}</span>
-          <span className="text-right font-semibold uppercase text-slate-500">SHA</span>
-          <span className="truncate font-mono text-slate-300" title={commit.hash}>{commit.hash}</span>
-          <span className="text-right font-semibold uppercase text-slate-500">Parents</span>
-          <span className="truncate text-slate-300">{commit.parents.length || 0}</span>
+          <span className="font-semibold uppercase text-slate-500">SHA</span>
+          <span className="truncate font-mono text-slate-300" title={revision}>{revision}</span>
+          <span className="font-semibold uppercase text-slate-500">Parents</span>
+          <span className="truncate text-slate-300">{commit.parents.length ? commit.parents.map(p => p.slice(0, 7)).join(', ') : '0'}</span>
         </div>
+      </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <button className="icon-btn accent" title="Create a branch at this commit" onClick={() => { const name = ask('New branch name', `branch-${short}`); if (name) runCommitAction('branch from commit', () => gitService.createBranchFromCommit(repo!, name, commit.hash, true)); }}>
+      <div className="border-b border-pilot-line px-4 py-3">
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          <button className="icon-btn accent" title="Create a branch at this commit" onClick={() => { const name = ask('New branch name', `branch-${short}`); if (name) runCommitAction('branch from commit', () => gitService.createBranchFromCommit(repo!, name, revision, true)); }}>
             <GitBranch size={12} /> Branch
           </button>
-          <button className="icon-btn" title="Create a lightweight tag at this commit" onClick={() => { const name = ask('New tag name', `tag-${short}`); if (name) runCommitAction('tag commit', () => gitService.createTagFromCommit(repo!, name, commit.hash)); }}>
+          <button className="icon-btn" title="Create a lightweight tag at this commit" onClick={() => { const name = ask('New tag name', `tag-${short}`); if (name) runCommitAction('tag commit', () => gitService.createTagFromCommit(repo!, name, revision)); }}>
             <Tag size={12} /> Tag
           </button>
-          <button className="icon-btn" title="Cherry-pick this commit" onClick={() => confirm(`Cherry-pick ${short}?`) && runCommitAction('cherry-pick', () => gitService.cherryPickCommit(repo!, commit.hash))}>
+          <button className="icon-btn" title="Cherry-pick this commit" onClick={() => confirm(`Cherry-pick ${short}?`) && runCommitAction('cherry-pick', () => gitService.cherryPickCommit(repo!, revision))}>
             <GitCompare size={12} /> Pick
           </button>
-          <button className="icon-btn" title="Revert this commit" onClick={() => confirm(`Revert ${short}?`) && runCommitAction('revert commit', () => gitService.revertCommit(repo!, commit.hash))}>
+          <button className="icon-btn" title="Revert this commit" onClick={() => confirm(`Revert ${short}?`) && runCommitAction('revert commit', () => gitService.revertCommit(repo!, revision))}>
             <Undo2 size={12} /> Revert
           </button>
-          <button className="icon-btn" title="Checkout this commit in detached HEAD" onClick={() => confirm(`Checkout ${short} in detached HEAD?`) && runCommitAction('checkout commit', () => gitService.checkoutCommit(repo!, commit.hash))}>
+          <button className="icon-btn" title="Checkout this commit in detached HEAD" onClick={() => confirm(`Checkout ${short} in detached HEAD?`) && runCommitAction('checkout commit', () => gitService.checkoutCommit(repo!, revision))}>
             <RotateCcw size={12} /> Checkout
           </button>
         </div>
 
-        <div className="mt-3">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Reset current branch</div>
+        <div>
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Reset current branch</div>
           <div className="flex flex-wrap gap-1.5">
-            <button className="btn" title="Keep all changes staged" onClick={() => confirm(`Soft reset current branch to ${short}?`) && runCommitAction('soft reset', () => gitService.resetToCommit(repo!, commit.hash, 'soft'))}>Soft</button>
-            <button className="btn" title="Keep changes unstaged" onClick={() => confirm(`Mixed reset current branch to ${short}?`) && runCommitAction('mixed reset', () => gitService.resetToCommit(repo!, commit.hash, 'mixed'))}>Mixed</button>
-            <button className="btn border-red-900/60 text-red-300 hover:bg-red-950/50" title="Discard changes after this commit" onClick={() => confirm(`Hard reset current branch to ${short}? This can discard work.`) && runCommitAction('hard reset', () => gitService.resetToCommit(repo!, commit.hash, 'hard'))}>Hard</button>
+            <button className="btn" title="Keep all changes staged" onClick={() => confirm(`Soft reset current branch to ${short}?`) && runCommitAction('soft reset', () => gitService.resetToCommit(repo!, revision, 'soft'))}>Soft</button>
+            <button className="btn" title="Keep changes unstaged" onClick={() => confirm(`Mixed reset current branch to ${short}?`) && runCommitAction('mixed reset', () => gitService.resetToCommit(repo!, revision, 'mixed'))}>Mixed</button>
+            <button className="btn border-red-900/60 text-red-300 hover:bg-red-950/50" title="Discard changes after this commit" onClick={() => confirm(`Hard reset current branch to ${short}? This can discard work.`) && runCommitAction('hard reset', () => gitService.resetToCommit(repo!, revision, 'hard'))}>Hard</button>
           </div>
         </div>
       </div>
 
-      <div className="min-w-0 px-3 py-3">
+      <div className="min-w-0 px-4 py-3">
         <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-slate-500">
           <span>Files</span>
           <span>{commitFilesLoading ? '...' : commitFiles.length}</span>
         </div>
-        <div className="max-h-[205px] space-y-0.5 overflow-auto">
+        <div className="max-h-56 space-y-0.5 overflow-auto">
           {commitFilesLoading && <div className="py-1 text-xs text-slate-500">Loading files...</div>}
           {commitFilesError && !commitFilesLoading && <div className="py-1 text-xs text-red-300">{commitFilesError}</div>}
           {!commitFilesLoading && !commitFilesError && commitFiles.length === 0 && <div className="py-1 text-xs text-slate-500">No file list for this commit.</div>}

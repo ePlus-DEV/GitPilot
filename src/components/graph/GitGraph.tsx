@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Filter, GitCommitHorizontal, Search, X } from 'lucide-react';
+import { Filter, GitCommitHorizontal, Search, SlidersHorizontal, X } from 'lucide-react';
 import { ContextMenu } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
@@ -170,6 +170,7 @@ export function GitGraph() {
   const run = useGitStore(s => s.run);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<HistoryFilters>(historyFilters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: CommitInfo }>();
@@ -235,37 +236,40 @@ export function GitGraph() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090e1b]">
       <div className="sticky top-0 z-10 border-b border-pilot-line bg-[#0d1324] p-2">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            <GitCommitHorizontal size={13} /> Commit Graph - {visibleRows.length}/{history.length}
+        <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <GitCommitHorizontal size={13} /> {visibleRows.length}/{history.length}
           </div>
-          {hasFilter && <button className="icon-btn h-6" onClick={clear}><X size={12} /> Clear</button>}
-        </div>
-
-        <div className="grid grid-cols-[1.2fr_140px_140px_110px_110px] gap-2">
-          <label className="relative">
+          <label className="relative min-w-[220px] flex-1">
             <Search size={13} className="pointer-events-none absolute left-2 top-1.5 text-slate-500" />
-            <input className="input h-7 w-full pl-7 text-xs" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search hash, message, author..." />
+            <input className="input h-7 w-full pl-7 text-xs" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search commit, SHA, author..." />
           </label>
-          <label className="relative">
+          <label className="relative hidden w-40 xl:block">
             <Filter size={12} className="pointer-events-none absolute left-2 top-2 text-slate-500" />
             <select className="input h-7 w-full pl-7 text-xs" value={filters.author ?? ''} onChange={e => setFilters(f => ({ ...f, author: e.target.value || undefined }))}>
               <option value="">All authors</option>
               {authors.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </label>
-          <select className="input h-7 w-full text-xs" value={filters.branch ?? ''} onChange={e => setFilters(f => ({ ...f, branch: e.target.value || undefined }))}>
+          <select className="input hidden h-7 w-40 text-xs xl:block" value={filters.branch ?? ''} onChange={e => setFilters(f => ({ ...f, branch: e.target.value || undefined }))}>
             <option value="">All refs</option>
             {refs.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <input className="input h-7 text-xs" type="date" value={filters.since ?? ''} onChange={e => setFilters(f => ({ ...f, since: e.target.value || undefined }))} title="Since" />
-          <input className="input h-7 text-xs" type="date" value={filters.until ?? ''} onChange={e => setFilters(f => ({ ...f, until: e.target.value || undefined }))} title="Until" />
+          <button className={`icon-btn h-7 ${filtersOpen ? 'accent' : ''}`} onClick={() => setFiltersOpen(v => !v)} title="Advanced filters">
+            <SlidersHorizontal size={13} />
+            <span>Filters</span>
+          </button>
+          {hasFilter && <button className="icon-btn h-7" onClick={clear}><X size={12} /> Clear</button>}
         </div>
 
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <input className="input h-7 text-xs" value={filters.keyword ?? ''} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value || undefined }))} placeholder="Commit message keyword (git --grep)" />
-          <input className="input h-7 text-xs" value={filters.filePath ?? ''} onChange={e => setFilters(f => ({ ...f, filePath: e.target.value || undefined }))} placeholder="File path filter (e.g. src/App.tsx)" />
-        </div>
+        {filtersOpen && (
+          <div className="mt-2 grid grid-cols-[minmax(130px,160px)_minmax(130px,160px)_1fr_1fr] gap-2">
+            <input className="input h-7 text-xs" type="date" value={filters.since ?? ''} onChange={e => setFilters(f => ({ ...f, since: e.target.value || undefined }))} title="Since" />
+            <input className="input h-7 text-xs" type="date" value={filters.until ?? ''} onChange={e => setFilters(f => ({ ...f, until: e.target.value || undefined }))} title="Until" />
+            <input className="input h-7 text-xs" value={filters.keyword ?? ''} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value || undefined }))} placeholder="Commit message keyword (git --grep)" />
+            <input className="input h-7 text-xs" value={filters.filePath ?? ''} onChange={e => setFilters(f => ({ ...f, filePath: e.target.value || undefined }))} placeholder="File path filter (e.g. src/App.tsx)" />
+          </div>
+        )}
       </div>
 
       <div ref={listRef} className="min-h-0 flex-1 select-none overflow-auto [overflow-anchor:none]" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
