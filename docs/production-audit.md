@@ -62,7 +62,7 @@ This audit added backend contracts for previously missing core Git workflows: cl
 
 ## Bug list / risks
 - `git pull` could not be run in this checkout because the current branch has no configured remote tracking branch.
-- CI currently builds all desktop bundles on every PR, which makes PR validation expensive and artifact-heavy.
+- CI intentionally builds and uploads Linux, Windows, and macOS desktop bundles on every PR so reviewers can download platform artifacts; the tradeoff is slower validation until a separate opt-in fast-check workflow exists.
 - Git operations are porcelain subprocess calls; acceptable for breadth, but long-running commands need cancellation/progress streaming.
 - Recent repository storage is flat and not a workspace schema.
 - AI key is represented in settings and should move to secure storage before production.
@@ -86,7 +86,7 @@ This audit added backend contracts for previously missing core Git workflows: cl
 
 ### Production
 - Signed updater, crash logging, telemetry toggle, hardened secret storage, provider integrations, release channels.
-- CI split into PR validation and release packaging.
+- Keep PR artifact builds for reviewer access, then add an optional fast-check workflow or label-gated packaging path if CI minutes become a bottleneck.
 
 ### GitKraken+ parity
 - Drag/drop rebase/branch operations, advanced PR review, author avatars, AI summaries, bisect UI, and repository insights dashboards.
