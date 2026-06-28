@@ -44,6 +44,14 @@ pub fn get_commit_file_diff(
     commit: String,
     file_path: String,
 ) -> Result<DiffResult, GitError> {
+    let commit = commit.trim();
+    let file_path = file_path.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
+    if file_path.is_empty() {
+        return Err(GitError::new("invalid_path", "File path is empty.", ""));
+    }
     let patch = git_service::git_checked(
         &repo_path,
         &[
@@ -51,14 +59,14 @@ pub fn get_commit_file_diff(
             "--format=",
             "--find-renames",
             "--first-parent",
-            &commit,
+            commit,
             "--",
-            &file_path,
+            file_path,
         ],
     )?
     .stdout;
     Ok(DiffResult {
-        file_path,
+        file_path: file_path.to_string(),
         old_text: String::new(),
         new_text: String::new(),
         binary: patch.contains("Binary files"),

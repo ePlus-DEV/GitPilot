@@ -92,6 +92,10 @@ pub fn get_history(
 }
 #[tauri::command]
 pub fn get_commit_files(repo_path: String, commit: String) -> Result<Vec<CommitFile>, GitError> {
+    let commit = commit.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
     let out = git_service::git_text(
         &repo_path,
         &[
@@ -102,7 +106,7 @@ pub fn get_commit_files(repo_path: String, commit: String) -> Result<Vec<CommitF
             "-z",
             "--no-commit-id",
             "-r",
-            &commit,
+            commit,
         ],
     )?;
     let mut files = Vec::new();
@@ -133,7 +137,12 @@ pub fn get_commit_files(repo_path: String, commit: String) -> Result<Vec<CommitF
 }
 #[tauri::command]
 pub fn compare_commits(repo_path: String, from: String, to: String) -> Result<String, GitError> {
-    git_service::git_text(&repo_path, &["diff", "--stat", &from, &to])
+    let from = from.trim();
+    let to = to.trim();
+    if from.is_empty() || to.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit range contains an empty revision.", ""));
+    }
+    git_service::git_text(&repo_path, &["diff", "--stat", from, to])
 }
 
 #[tauri::command]
@@ -141,7 +150,11 @@ pub fn checkout_commit(
     repo_path: String,
     commit: String,
 ) -> Result<crate::models::git::GitCommandOutput, GitError> {
-    git_service::git_checked(&repo_path, &["checkout", &commit])
+    let commit = commit.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
+    git_service::git_checked(&repo_path, &["checkout", commit])
 }
 #[tauri::command]
 pub fn create_branch_from_commit(
@@ -150,10 +163,14 @@ pub fn create_branch_from_commit(
     commit: String,
     checkout: bool,
 ) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    let commit = commit.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
     if checkout {
-        git_service::git_checked(&repo_path, &["checkout", "-b", &name, &commit])
+        git_service::git_checked(&repo_path, &["checkout", "-b", &name, commit])
     } else {
-        git_service::git_checked(&repo_path, &["branch", &name, &commit])
+        git_service::git_checked(&repo_path, &["branch", &name, commit])
     }
 }
 #[tauri::command]
@@ -162,21 +179,33 @@ pub fn create_tag_from_commit(
     name: String,
     commit: String,
 ) -> Result<crate::models::git::GitCommandOutput, GitError> {
-    git_service::git_checked(&repo_path, &["tag", &name, &commit])
+    let commit = commit.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
+    git_service::git_checked(&repo_path, &["tag", &name, commit])
 }
 #[tauri::command]
 pub fn cherry_pick_commit(
     repo_path: String,
     commit: String,
 ) -> Result<crate::models::git::GitCommandOutput, GitError> {
-    git_service::git_checked(&repo_path, &["cherry-pick", &commit])
+    let commit = commit.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
+    git_service::git_checked(&repo_path, &["cherry-pick", commit])
 }
 #[tauri::command]
 pub fn revert_commit(
     repo_path: String,
     commit: String,
 ) -> Result<crate::models::git::GitCommandOutput, GitError> {
-    git_service::git_checked(&repo_path, &["revert", "--no-edit", &commit])
+    let commit = commit.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
+    git_service::git_checked(&repo_path, &["revert", "--no-edit", commit])
 }
 #[tauri::command]
 pub fn reset_to_commit(
@@ -184,12 +213,16 @@ pub fn reset_to_commit(
     commit: String,
     mode: String,
 ) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    let commit = commit.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
     let flag = match mode.as_str() {
         "soft" => "--soft",
         "hard" => "--hard",
         _ => "--mixed",
     };
-    git_service::git_checked(&repo_path, &["reset", flag, &commit])
+    git_service::git_checked(&repo_path, &["reset", flag, commit])
 }
 
 #[tauri::command]

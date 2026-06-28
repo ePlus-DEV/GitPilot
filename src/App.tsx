@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useGitStore } from './store/gitStore';
 import { TopBar } from './components/layout/TopBar';
 import { Sidebar } from './components/layout/Sidebar';
@@ -17,6 +18,10 @@ export function App() {
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const conflict = useGitStore(s => s.conflict);
   const settingsOpen = useGitStore(s => s.settingsOpen);
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [rightWidth, setRightWidth] = useState(390);
+  const [detailsHeight, setDetailsHeight] = useState(250);
+  const [consoleHeight, setConsoleHeight] = useState(144);
 
   useEffect(() => {
     void gitService.getSettings().then(settings => {
@@ -36,36 +41,53 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const startResize = (move: (event: MouseEvent) => void) => (event: ReactMouseEvent) => {
+    event.preventDefault();
+    document.body.style.cursor = event.currentTarget.classList.contains('cursor-col-resize') ? 'col-resize' : 'row-resize';
+    document.body.style.userSelect = 'none';
+    const stop = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', stop);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', stop);
+  };
+
   return (
     <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
       <TopBar />
 
-      {/* Main 3-column layout like GitKraken */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-
-        {/* Column 1: Sidebar — branches, remotes, tags, stashes */}
-        <Sidebar />
-
-        {/* Column 2 (center): Commit graph — largest area */}
-        <div className="flex min-h-0 flex-col flex-1 min-w-0 border-r border-pilot-line">
-          <GitGraph />
+        <div className="min-h-0 shrink-0" style={{ width: sidebarWidth }}>
+          <Sidebar />
         </div>
+        <div
+          className="w-1 shrink-0 cursor-col-resize border-r border-pilot-line bg-[#0d1324] hover:bg-pilot-blue/60"
+          onMouseDown={startResize(event => setSidebarWidth(Math.min(360, Math.max(190, event.clientX))))}
+        />
 
-        {/* Column 3: changes, diff, commit tools */}
-        <aside className="relative flex min-h-0 w-[400px] shrink-0 flex-col bg-[#080d19] xl:w-[440px]">
-          <StatusPanel />
-          {conflict ? (
-            <MergeResolver />
-          ) : (
-            <>
-              {selectedCommit && (
-                <div className="max-h-[42%] shrink-0 overflow-auto border-b border-pilot-line">
-                  <CommitDetails />
-                </div>
-              )}
-              <DiffViewer />
-            </>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-[#090e1b]">
+          <GitGraph />
+          {selectedCommit && (
+            <div className="relative shrink-0 overflow-auto border-t border-pilot-line bg-[#0b1120]" style={{ height: detailsHeight }}>
+              <div
+                className="sticky top-0 z-10 h-1 cursor-row-resize bg-pilot-line hover:bg-pilot-blue"
+                onMouseDown={startResize(event => setDetailsHeight(Math.min(420, Math.max(170, window.innerHeight - event.clientY - 42))))}
+              />
+              <CommitDetails />
+            </div>
           )}
+        </main>
+
+        <div
+          className="w-1 shrink-0 cursor-col-resize bg-[#0d1324] hover:bg-pilot-blue/60"
+          onMouseDown={startResize(event => setRightWidth(Math.min(560, Math.max(320, window.innerWidth - event.clientX))))}
+        />
+        <aside className="relative flex min-h-0 shrink-0 flex-col bg-[#080d19]" style={{ width: rightWidth }}>
+          <StatusPanel />
+          {conflict ? <MergeResolver /> : <DiffViewer />}
           <div className="shrink-0 border-t border-pilot-line bg-pilot-panel">
             <CommitPanel />
             <AiPanel />
@@ -74,7 +96,10 @@ export function App() {
         </aside>
       </div>
 
-      <ConsolePanel />
+      <ConsolePanel
+        height={consoleHeight}
+        onResizeStart={startResize(event => setConsoleHeight(Math.min(360, Math.max(80, window.innerHeight - event.clientY))))}
+      />
     </div>
   );
 }
