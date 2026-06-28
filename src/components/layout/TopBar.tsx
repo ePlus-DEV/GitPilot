@@ -4,7 +4,12 @@ import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 
 export function TopBar() {
-  const { repo, status, busy, openRepo, refresh, run } = useGitStore();
+  const repo = useGitStore(s => s.repo);
+  const status = useGitStore(s => s.status);
+  const busy = useGitStore(s => s.busy);
+  const openRepo = useGitStore(s => s.openRepo);
+  const refresh = useGitStore(s => s.refresh);
+  const run = useGitStore(s => s.run);
   const pick = async () => {
     const p = await open({ directory: true, multiple: false });
     if (p && !Array.isArray(p)) void openRepo(p);

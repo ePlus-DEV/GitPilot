@@ -4,9 +4,17 @@ import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 
 export function Sidebar() {
-  const s = useGitStore();
+  const recent = useGitStore(s => s.recent);
+  const repoInfo = useGitStore(s => s.repo);
+  const branches = useGitStore(s => s.branches);
+  const remotes = useGitStore(s => s.remotes);
+  const tags = useGitStore(s => s.tags);
+  const stashes = useGitStore(s => s.stashes);
+  const mergeState = useGitStore(s => s.status.mergeState);
+  const openRepo = useGitStore(s => s.openRepo);
+  const run = useGitStore(s => s.run);
   const [newBranch, setNewBranch] = useState('');
-  const repo = s.repo?.path;
+  const repo = repoInfo?.path;
 
   return (
     <aside className="w-60 shrink-0 flex flex-col overflow-hidden border-r border-pilot-line bg-[#0a0f1e]">
@@ -14,15 +22,15 @@ export function Sidebar() {
 
         {/* Recent Repos */}
         <Section icon={<FolderGit2 size={13} />} title="Repositories">
-          {s.recent.length === 0
+          {recent.length === 0
             ? <div className="px-3 py-1 text-[11px] text-slate-600">No recent repos</div>
-            : s.recent.map(r => (
+            : recent.map(r => (
               <SidebarRow
                 key={r}
                 label={r.split(/[\\/]/).pop() ?? r}
                 title={r}
-                onClick={() => void s.openRepo(r)}
-                active={s.repo?.path === r}
+                onClick={() => void openRepo(r)}
+                active={repoInfo?.path === r}
                 onDelete={() => void gitService.removeRecentRepository(r).then(recent => useGitStore.setState({ recent }))}
               />
             ))
@@ -39,7 +47,7 @@ export function Sidebar() {
               placeholder="new branch…"
               onKeyDown={e => {
                 if (e.key === 'Enter' && newBranch && repo) {
-                  void s.run('create branch', () => gitService.createBranch(repo, newBranch, true));
+                  void run('create branch', () => gitService.createBranch(repo, newBranch, true));
                   setNewBranch('');
                 }
               }}
@@ -50,21 +58,21 @@ export function Sidebar() {
               disabled={!newBranch || !repo}
               onClick={() => {
                 if (!newBranch || !repo) return;
-                void s.run('create branch', () => gitService.createBranch(repo, newBranch, true));
+                void run('create branch', () => gitService.createBranch(repo, newBranch, true));
                 setNewBranch('');
               }}
             >
               <Plus size={11} />
             </button>
           </div>
-          {s.branches.filter(b => !b.remote).map(b => (
+          {branches.filter(b => !b.remote).map(b => (
             <SidebarRow
               key={b.name}
               label={b.name}
               active={b.current}
               icon={b.current ? <span className="w-1.5 h-1.5 rounded-full bg-pilot-blue shrink-0" /> : undefined}
-              onClick={() => repo && void s.run('checkout', () => gitService.checkoutBranch(repo, b.name))}
-              onDelete={() => repo && void s.run('delete branch', () => gitService.deleteBranch(repo, b.name, false))}
+              onClick={() => repo && void run('checkout', () => gitService.checkoutBranch(repo, b.name))}
+              onDelete={() => repo && void run('delete branch', () => gitService.deleteBranch(repo, b.name, false))}
               meta={b.ahead || b.behind ? `↑${b.ahead} ↓${b.behind}` : undefined}
             />
           ))}
@@ -72,31 +80,31 @@ export function Sidebar() {
 
         {/* Remote Branches */}
         <Section icon={<Globe size={13} />} title="Remotes">
-          {s.remotes.map(r => (
+          {remotes.map(r => (
             <div key={r.name}>
               <div className="px-3 py-1 text-[11px] font-semibold text-slate-400">{r.name}</div>
-              {s.branches.filter(b => b.remote && b.name.startsWith(r.name + '/')).map(b => (
+              {branches.filter(b => b.remote && b.name.startsWith(r.name + '/')).map(b => (
                 <SidebarRow
                   key={b.name}
                   label={b.name.replace(r.name + '/', '')}
-                  onClick={() => repo && void s.run('checkout', () => gitService.checkoutBranch(repo, b.name))}
+                  onClick={() => repo && void run('checkout', () => gitService.checkoutBranch(repo, b.name))}
                 />
               ))}
             </div>
           ))}
-          {s.remotes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No remotes</div>}
+          {remotes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No remotes</div>}
         </Section>
 
         {/* Tags */}
         <Section icon={<Tag size={13} />} title="Tags">
-          {s.tags.map(t => (
+          {tags.map(t => (
             <SidebarRow
               key={t.name}
               label={t.name}
-              onDelete={() => repo && void s.run('delete tag', () => gitService.deleteTag(repo, t.name))}
+              onDelete={() => repo && void run('delete tag', () => gitService.deleteTag(repo, t.name))}
             />
           ))}
-          {s.tags.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No tags</div>}
+          {tags.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No tags</div>}
         </Section>
 
         {/* Stashes */}
@@ -105,35 +113,35 @@ export function Sidebar() {
             <button
               className="icon-btn w-full justify-center text-[11px] h-6"
               disabled={!repo}
-              onClick={() => repo && void s.run('stash', () => gitService.createStash(repo, 'GitPilot stash'))}
+              onClick={() => repo && void run('stash', () => gitService.createStash(repo, 'GitPilot stash'))}
             >
               <Archive size={11} /> Stash changes
             </button>
           </div>
-          {s.stashes.map(st => (
+          {stashes.map(st => (
             <SidebarRow
               key={st.name}
               label={st.message || st.name}
-              onAction={() => repo && void s.run('pop stash', () => gitService.popStash(repo, st.name))}
+              onAction={() => repo && void run('pop stash', () => gitService.popStash(repo, st.name))}
               actionIcon={<RotateCcw size={11} />}
               actionTitle="Pop stash"
-              onDelete={() => repo && void s.run('drop stash', () => gitService.dropStash(repo, st.name))}
+              onDelete={() => repo && void run('drop stash', () => gitService.dropStash(repo, st.name))}
             />
           ))}
-          {s.stashes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No stashes</div>}
+          {stashes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No stashes</div>}
         </Section>
 
       </div>
 
       {/* Merge / Rebase state indicator */}
-      {(s.status.mergeState.isMerging || s.status.mergeState.isRebasing) && (
+      {(mergeState.isMerging || mergeState.isRebasing) && (
         <div className="shrink-0 border-t border-pilot-line p-2 bg-amber-950/40">
           <div className="flex items-center gap-1.5 text-amber-400 text-xs font-semibold">
             <GitMerge size={12} />
-            {s.status.mergeState.isMerging ? 'Merge in progress' : 'Rebase in progress'}
+            {mergeState.isMerging ? 'Merge in progress' : 'Rebase in progress'}
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5">
-            {s.status.mergeState.conflictedFiles.length} conflict(s)
+            {mergeState.conflictedFiles.length} conflict(s)
           </div>
         </div>
       )}

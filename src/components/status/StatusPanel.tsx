@@ -4,17 +4,19 @@ import { gitService } from '../../services/gitService';
 import type { GitFileStatus } from '../../types/git';
 
 export function StatusPanel() {
-  const s = useGitStore();
-  const repo = s.repo?.path;
-  const act = (label: string, fn: () => Promise<unknown>) => repo && s.run(label, fn);
+  const status = useGitStore(s => s.status);
+  const repo = useGitStore(s => s.repo?.path);
+  const run = useGitStore(s => s.run);
+  const loadConflict = useGitStore(s => s.loadConflict);
+  const act = (label: string, fn: () => Promise<unknown>) => repo && run(label, fn, 'status');
   const total =
-    s.status.staged.length +
-    s.status.unstaged.length +
-    s.status.untracked.length +
-    s.status.conflicted.length;
+    status.staged.length +
+    status.unstaged.length +
+    status.untracked.length +
+    status.conflicted.length;
 
   return (
-    <section className="flex h-[34%] min-h-[168px] max-h-[280px] shrink-0 flex-col overflow-hidden border-b border-pilot-line bg-pilot-panel">
+    <section className={`flex shrink-0 flex-col overflow-hidden border-b border-pilot-line bg-pilot-panel ${total === 0 ? 'h-[62px]' : 'h-[34%] min-h-[168px] max-h-[280px]'}`}>
       <div className="flex items-center justify-between gap-3 border-b border-pilot-line px-3 py-2">
         <div className="min-w-0">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Changes</h2>
@@ -30,12 +32,14 @@ export function StatusPanel() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto py-2">
-        <Group title="Staged" files={s.status.staged} action="Unstage" onAction={f => act('unstage', () => gitService.unstageFile(repo!, f.path))} cached />
-        <Group title="Unstaged" files={s.status.unstaged} action="Stage" onAction={f => act('stage', () => gitService.stageFile(repo!, f.path))} />
-        <Group title="Untracked" files={s.status.untracked} action="Add" onAction={f => act('stage', () => gitService.stageFile(repo!, f.path))} />
-        <Group title="Conflicted" files={s.status.conflicted} action="Resolve" onAction={f => void s.loadConflict(f.path)} />
-      </div>
+      {total > 0 && (
+        <div className="min-h-0 flex-1 overflow-auto py-2">
+          <Group title="Staged" files={status.staged} action="Unstage" onAction={f => act('unstage', () => gitService.unstageFile(repo!, f.path))} cached />
+          <Group title="Unstaged" files={status.unstaged} action="Stage" onAction={f => act('stage', () => gitService.stageFile(repo!, f.path))} />
+          <Group title="Untracked" files={status.untracked} action="Add" onAction={f => act('stage', () => gitService.stageFile(repo!, f.path))} />
+          <Group title="Conflicted" files={status.conflicted} action="Resolve" onAction={f => void loadConflict(f.path)} />
+        </div>
+      )}
     </section>
   );
 }
@@ -86,7 +90,7 @@ function Group({
               <button
                 className="icon-btn h-6 w-6 justify-center p-0 opacity-0 group-hover:opacity-100"
                 title="Discard changes"
-                onClick={() => repo && confirm(`Discard ${f.path}?`) && run('discard', () => gitService.discardFile(repo, f.path))}
+                onClick={() => repo && confirm(`Discard ${f.path}?`) && run('discard', () => gitService.discardFile(repo, f.path), 'status')}
               >
                 <RotateCcw size={12} />
               </button>
@@ -95,7 +99,7 @@ function Group({
               <button
                 className="icon-btn h-6 w-6 justify-center p-0 text-red-300 opacity-0 group-hover:opacity-100"
                 title="Delete untracked file"
-                onClick={() => repo && confirm(`Delete ${f.path}?`) && run('delete', () => gitService.deleteUntrackedFile(repo, f.path))}
+                onClick={() => repo && confirm(`Delete ${f.path}?`) && run('delete', () => gitService.deleteUntrackedFile(repo, f.path), 'status')}
               >
                 <Trash2 size={12} />
               </button>

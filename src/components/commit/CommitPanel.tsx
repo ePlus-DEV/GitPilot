@@ -6,20 +6,23 @@ import { gitService } from '../../services/gitService';
 export function CommitPanel() {
   const [msg, setMsg] = useState('');
   const [amend, setAmend] = useState(false);
-  const s = useGitStore();
-  const repo = s.repo?.path;
+  const repo = useGitStore(s => s.repo?.path);
+  const stagedCount = useGitStore(s => s.status.staged.length);
+  const settings = useGitStore(s => s.settings);
+  const run = useGitStore(s => s.run);
+  const log = useGitStore(s => s.log);
 
   const commit = () => {
     if (!repo) return;
     if (!msg.trim()) {
-      s.log('Commit message is required');
+      log('Commit message is required');
       return;
     }
-    if (!s.status.staged.length) {
-      s.log('No staged files to commit');
+    if (!stagedCount) {
+      log('No staged files to commit');
       return;
     }
-    void s.run('commit', () => gitService.commit(repo, msg, amend)).then(() => setMsg(''));
+    void run('commit', () => gitService.commit(repo, msg, amend)).then(() => setMsg(''));
   };
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export function CommitPanel() {
         <button
           className="icon-btn"
           title="Generate commit message"
-          onClick={() => repo && gitService.generateCommitMessage(repo, s.settings?.aiProvider || 'ollama', s.settings?.aiModel || '').then(r => setMsg(r.text.split('\n').pop() || r.text))}
+          onClick={() => repo && gitService.generateCommitMessage(repo, settings?.aiProvider || 'ollama', settings?.aiModel || '').then(r => setMsg(r.text.split('\n').pop() || r.text))}
         >
           <Sparkles size={13} />
           <span>AI</span>
