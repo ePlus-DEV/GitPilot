@@ -33,7 +33,7 @@ export function App() {
   }, [s]);
 
   return (
-    <div className="flex h-full flex-col bg-pilot-bg text-slate-100 overflow-hidden">
+    <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
       <TopBar />
 
       {/* Main 3-column layout like GitKraken */}
@@ -53,13 +53,15 @@ export function App() {
           )}
         </div>
 
-        {/* Column 3 (right): Staged/unstaged files + diff viewer */}
-        <aside className="flex min-h-0 flex-col bg-[#080d19] w-[380px] shrink-0">
+        {/* Column 3: changes, diff, commit tools */}
+        <aside className="relative flex min-h-0 w-[420px] shrink-0 flex-col bg-[#080d19] xl:w-[480px]">
           <StatusPanel />
           {s.conflict ? <MergeResolver /> : <DiffViewer />}
-          <CommitPanel />
-          <AiPanel />
-          <SettingsPanel />
+          <div className="shrink-0 border-t border-pilot-line bg-pilot-panel">
+            <CommitPanel />
+            <AiPanel />
+          </div>
+          {s.settingsOpen && <SettingsPanel />}
         </aside>
       </div>
 
