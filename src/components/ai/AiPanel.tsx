@@ -8,6 +8,8 @@ export function AiPanel() {
   const settings = useGitStore(s => s.settings);
   const aiText = useGitStore(s => s.aiText);
 
+  if (!diff && !aiText) return null;
+
   return (
     <div className="border-t border-pilot-line px-3 py-2">
       <button

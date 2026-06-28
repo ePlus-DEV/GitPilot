@@ -41,6 +41,8 @@ pub fn run() {
             commands::history::checkout_commit,
             commands::history::create_branch_from_commit,
             commands::history::create_tag_from_commit,
+            commands::history::create_annotated_tag_from_commit,
+            commands::history::create_patch_from_commit,
             commands::history::cherry_pick_commit,
             commands::history::revert_commit,
             commands::history::reset_to_commit,

@@ -17,10 +17,15 @@ import { gitService } from './services/gitService';
 export function App() {
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const conflict = useGitStore(s => s.conflict);
+  const diff = useGitStore(s => s.diff);
+  const status = useGitStore(s => s.status);
+  const aiText = useGitStore(s => s.aiText);
   const settingsOpen = useGitStore(s => s.settingsOpen);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [rightWidth, setRightWidth] = useState(430);
   const [consoleHeight, setConsoleHeight] = useState(144);
+  const changedCount = status.staged.length + status.unstaged.length + status.untracked.length + status.conflicted.length;
+  const hasInspectorContent = Boolean(changedCount || selectedCommit || conflict || diff);
 
   useEffect(() => {
     void gitService.getSettings().then(settings => {
@@ -76,17 +81,24 @@ export function App() {
           onMouseDown={startResize(event => setRightWidth(Math.min(640, Math.max(360, window.innerWidth - event.clientX))))}
         />
         <aside className="relative flex min-h-0 shrink-0 flex-col bg-[#080d19]" style={{ width: rightWidth }}>
-          <StatusPanel />
+          {changedCount > 0 && <StatusPanel />}
           {selectedCommit && !conflict && (
-            <div className="max-h-[45%] shrink-0 overflow-auto border-b border-pilot-line bg-[#0b1120]">
+            <div className={`${diff ? 'max-h-[52%]' : 'flex-1'} min-h-0 shrink-0 overflow-auto border-b border-pilot-line bg-[#0b1120]`}>
               <CommitDetails />
             </div>
           )}
-          {conflict ? <MergeResolver /> : <DiffViewer />}
+          {conflict ? <MergeResolver /> : diff ? <DiffViewer /> : null}
+          {!hasInspectorContent && (
+            <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-slate-500">
+              Select a commit or changed file to inspect it.
+            </div>
+          )}
+          {(changedCount > 0 || diff || aiText) && (
           <div className="shrink-0 border-t border-pilot-line bg-pilot-panel">
             <CommitPanel />
             <AiPanel />
           </div>
+          )}
           {settingsOpen && <SettingsPanel />}
         </aside>
       </div>

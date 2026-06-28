@@ -38,10 +38,30 @@ export function Sidebar() {
     const ref = branchRef(branch);
     const remoteName = remotes[0]?.name ?? 'origin';
     const canWriteLocal = !branch.remote;
+    const currentBranch = repoInfo?.currentBranch || 'current branch';
+    const separator = (label: string): ContextMenuItem => ({ label, separator: true, action: () => undefined });
+    const copyText = (label: string, value: string) => {
+      void navigator.clipboard.writeText(value).then(() => useGitStore.getState().log(`${label}: ${value}`)).catch(() => useGitStore.getState().log(value));
+    };
     return [
       {
         label: 'Checkout branch',
         action: () => repo && void run('checkout', () => gitService.checkoutBranch(repo, ref)),
+      },
+      {
+        label: `Create worktree from ${ref}`,
+        action: () => {
+          const path = ask('Worktree path', `../worktree-${branchDisplay(branch)}`);
+          if (path && repo) void run('create worktree', () => gitService.createWorktree(repo, path, ref, false));
+        },
+      },
+      separator('branch-actions'),
+      {
+        label: 'Create branch here',
+        action: () => {
+          const name = ask('New branch name', `${branchDisplay(branch)}-copy`);
+          if (name && repo) void run('branch from ref', () => gitService.createBranchFromCommit(repo, name, ref, true));
+        },
       },
       {
         label: 'Merge into current branch',
@@ -53,6 +73,29 @@ export function Sidebar() {
         label: 'Compare with HEAD',
         action: () => repo && void run('compare branch', () => gitService.compareBranch(repo, ref), 'none'),
       },
+      {
+        label: `Reset ${currentBranch} to ${ref}: soft`,
+        disabled: branch.current,
+        action: () => {
+          if (confirm(`Soft reset ${currentBranch} to ${ref}?`)) repo && void run('soft reset', () => gitService.resetToCommit(repo, ref, 'soft'));
+        },
+      },
+      {
+        label: `Reset ${currentBranch} to ${ref}: mixed`,
+        disabled: branch.current,
+        action: () => {
+          if (confirm(`Mixed reset ${currentBranch} to ${ref}?`)) repo && void run('mixed reset', () => gitService.resetToCommit(repo, ref, 'mixed'));
+        },
+      },
+      {
+        label: `Reset ${currentBranch} to ${ref}: hard`,
+        danger: true,
+        disabled: branch.current,
+        action: () => {
+          if (confirm(`Hard reset ${currentBranch} to ${ref}? This can discard work.`)) repo && void run('hard reset', () => gitService.resetToCommit(repo, ref, 'hard'));
+        },
+      },
+      separator('remote-actions'),
       {
         label: 'Rename branch',
         disabled: !canWriteLocal,
@@ -70,6 +113,7 @@ export function Sidebar() {
         label: `Fetch ${remoteName}`,
         action: () => repo && void run('fetch', () => gitService.fetch(repo, remoteName)),
       },
+      separator('delete-actions'),
       {
         label: 'Delete branch',
         danger: true,
@@ -85,6 +129,11 @@ export function Sidebar() {
         action: () => {
           if (confirm(`Force delete ${branch.name}? This can discard unmerged commits.`)) repo && void run('force delete branch', () => gitService.deleteBranch(repo, branch.name, true));
         },
+      },
+      separator('copy-actions'),
+      {
+        label: 'Copy branch name',
+        action: () => copyText('Copied branch name', ref),
       },
     ];
   };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
@@ -8,11 +8,12 @@ export function CommitPanel() {
   const [amend, setAmend] = useState(false);
   const repo = useGitStore(s => s.repo?.path);
   const stagedCount = useGitStore(s => s.status.staged.length);
+  const changedCount = useGitStore(s => s.status.staged.length + s.status.unstaged.length + s.status.untracked.length + s.status.conflicted.length);
   const settings = useGitStore(s => s.settings);
   const run = useGitStore(s => s.run);
   const log = useGitStore(s => s.log);
 
-  const commit = () => {
+  const commit = useCallback(() => {
     if (!repo) return;
     if (!msg.trim()) {
       log('Commit message is required');
@@ -23,13 +24,15 @@ export function CommitPanel() {
       return;
     }
     void run('commit', () => gitService.commit(repo, msg, amend)).then(() => setMsg(''));
-  };
+  }, [amend, log, msg, repo, run, stagedCount]);
 
   useEffect(() => {
     const h = () => commit();
     document.addEventListener('gitpilot-commit', h);
     return () => document.removeEventListener('gitpilot-commit', h);
-  });
+  }, [commit]);
+
+  if (changedCount === 0) return null;
 
   return (
     <div className="p-3">

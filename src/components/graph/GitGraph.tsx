@@ -1,86 +1,55 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { Filter, GitCommitHorizontal, Search, SlidersHorizontal, X } from 'lucide-react';
-import { ContextMenu } from '../common/ContextMenu';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import type { CommitInfo, HistoryFilters } from '../../types/git';
 
 const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
-const ROW_H = 36;
-const LANE_W = 13;
+const ROW_H = 32;
+const GRAPH_CHAR_W = 7;
 const CIRCLE_R = 4;
 const PAD_LEFT = 8;
 const OVERSCAN = 8;
-const MAX_VISIBLE_LANES = 4;
-const GRAPH_W = MAX_VISIBLE_LANES * LANE_W + PAD_LEFT * 2;
+const MAX_GRAPH_CHARS = 28;
+const GRAPH_W = MAX_GRAPH_CHARS * GRAPH_CHAR_W + PAD_LEFT * 2;
+const REFS_W = 210;
 const LOAD_MORE_H = 58;
-const HISTORY_GRID = 'grid-cols-[minmax(360px,1fr)_170px_110px_140px]';
+const HISTORY_GRID = 'grid-cols-[minmax(480px,1fr)_220px]';
+
+type GraphSegment = {
+  kind: 'vertical' | 'slash' | 'backslash' | 'horizontal';
+  col: number;
+  color: string;
+};
 
 type RowData = {
   commit: CommitInfo;
-  lane: number;
+  nodeCol: number;
   color: string;
-  lines: Array<{ fromLane: number; toLane: number; color: string; pos: 'top' | 'bottom' }>;
-  maxLane: number;
+  segments: GraphSegment[];
 };
 
 function buildRows(commits: CommitInfo[]): RowData[] {
-  const lanes: Array<{ hash: string; colorIdx: number } | null> = [];
-  const colorCounter = { n: 0 };
-  const nextColor = () => colorCounter.n++ % LANE_COLORS.length;
-  const findLane = (hash: string) => lanes.findIndex(l => l?.hash === hash);
-  const freeLane = () => {
-    const idx = lanes.findIndex(l => l === null);
-    return idx === -1 ? lanes.length : idx;
-  };
-  const rows: RowData[] = [];
+  return commits.map(commit => {
+    const graph = commit.graph || '*';
+    const chars = Array.from(graph.slice(0, MAX_GRAPH_CHARS));
+    const rawNodeCol = chars.findIndex(ch => ch === '*');
+    const nodeCol = rawNodeCol >= 0 ? rawNodeCol : 0;
+    const colorForCol = (col: number) => LANE_COLORS[Math.floor(Math.max(0, col) / 2) % LANE_COLORS.length];
+    const color = colorForCol(nodeCol);
+    const segments: GraphSegment[] = [];
 
-  for (const commit of commits) {
-    let myLane = findLane(commit.hash);
-    let myColorIdx: number;
-    if (myLane === -1) {
-      myLane = freeLane();
-      myColorIdx = nextColor();
-      if (myLane === lanes.length) lanes.push(null);
-      lanes[myLane] = { hash: commit.hash, colorIdx: myColorIdx };
-    } else {
-      myColorIdx = lanes[myLane]!.colorIdx;
-    }
+    chars.forEach((ch, col) => {
+      if (ch === '|') segments.push({ kind: 'vertical', col, color: colorForCol(col) });
+      else if (ch === '/') segments.push({ kind: 'slash', col, color: colorForCol(col + 1) });
+      else if (ch === '\\') segments.push({ kind: 'backslash', col, color: colorForCol(col) });
+      else if (ch === '_' || ch === '-') segments.push({ kind: 'horizontal', col, color });
+    });
 
-    const myColor = LANE_COLORS[myColorIdx];
-    const lines: RowData['lines'] = [];
-    for (let i = 0; i < lanes.length; i++) {
-      if (i !== myLane && lanes[i]) lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[lanes[i]!.colorIdx], pos: 'top' });
-    }
-
-    const parents = commit.parents ?? [];
-    lanes[myLane] = null;
-    if (parents[0]) {
-      const existingLane = findLane(parents[0]);
-      if (existingLane === -1) lanes[myLane] = { hash: parents[0], colorIdx: myColorIdx };
-      else lines.push({ fromLane: myLane, toLane: existingLane, color: myColor, pos: 'bottom' });
-    }
-    for (let i = 1; i < parents.length; i++) {
-      const parent = parents[i];
-      const existingLane = findLane(parent);
-      if (existingLane === -1) {
-        const newLane = freeLane();
-        const newColorIdx = nextColor();
-        if (newLane === lanes.length) lanes.push(null);
-        lanes[newLane] = { hash: parent, colorIdx: newColorIdx };
-        lines.push({ fromLane: myLane, toLane: newLane, color: LANE_COLORS[newColorIdx], pos: 'bottom' });
-      } else {
-        lines.push({ fromLane: myLane, toLane: existingLane, color: LANE_COLORS[lanes[existingLane]!.colorIdx], pos: 'bottom' });
-      }
-    }
-    for (let i = 0; i < lanes.length; i++) {
-      if (i !== myLane && lanes[i]) lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[lanes[i]!.colorIdx], pos: 'bottom' });
-    }
-
-    rows.push({ commit, lane: myLane, color: myColor, lines, maxLane: Math.max(myLane, ...lanes.map((l, i) => l ? i : 0)) });
-  }
-  return rows;
+    return { commit, nodeCol, color, segments };
+  });
 }
 
 const normalized = (value: string) => value.toLowerCase().trim();
@@ -90,6 +59,18 @@ function matchesCommit(commit: CommitInfo, query: string) {
   if (!q) return true;
   const refNames = commit.refs.join(' ');
   return [commit.message, commit.hash, commit.shortHash, commit.author, refNames].some(v => normalized(v).includes(q));
+}
+
+function cleanRef(ref: string) {
+  return ref.replace('HEAD -> ', '').replace('tag: ', '');
+}
+
+function refClassName(ref: string, selected: boolean) {
+  if (selected) return 'bg-white/20 text-white';
+  if (ref.includes('HEAD')) return 'bg-yellow-500/20 text-yellow-300';
+  if (ref.includes('origin/')) return 'bg-emerald-500/15 text-emerald-300';
+  if (ref.startsWith('tag:')) return 'bg-violet-500/15 text-violet-300';
+  return 'bg-sky-500/15 text-sky-200';
 }
 
 const GraphRow = memo(function GraphRow({
@@ -104,11 +85,10 @@ const GraphRow = memo(function GraphRow({
   onContextMenu: (event: ReactMouseEvent) => void;
 }) {
   const cy = ROW_H / 2;
-  const laneOffset = Math.max(0, Math.min(row.lane - Math.floor(MAX_VISIBLE_LANES / 2), row.maxLane - MAX_VISIBLE_LANES + 1));
-  const laneVisible = (lane: number) => lane >= laneOffset && lane < laneOffset + MAX_VISIBLE_LANES;
-  const xForLane = (lane: number) => PAD_LEFT + (lane - laneOffset) * LANE_W;
-  const cx = xForLane(row.lane);
-  const visibleLines = row.lines.filter(ln => laneVisible(ln.fromLane) || laneVisible(ln.toLane));
+  const xForCol = (col: number) => PAD_LEFT + col * GRAPH_CHAR_W;
+  const cx = xForCol(row.nodeCol);
+  const refs = row.commit.refs.slice(0, 3);
+  const hasExtraRefs = row.commit.refs.length > refs.length;
 
   return (
     <button
@@ -117,44 +97,55 @@ const GraphRow = memo(function GraphRow({
       onMouseDown={e => e.preventDefault()}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={`grid w-full select-none ${HISTORY_GRID} items-center border-t border-pilot-line text-left transition-colors hover:bg-slate-800/60 ${selected ? 'bg-sky-600 text-white hover:bg-sky-600' : 'text-slate-200'}`}
+      className={`grid w-full select-none ${HISTORY_GRID} items-center border-t border-pilot-line/80 text-left transition-colors hover:bg-slate-800/50 ${selected ? 'bg-sky-700/95 text-white hover:bg-sky-700/95' : 'text-slate-300'}`}
       style={{ height: ROW_H }}
     >
       <div className="flex min-w-0 items-center">
-        <div className="w-16 shrink-0 overflow-hidden">
+        <div className="flex min-w-0 shrink-0 items-center gap-1.5 px-2" style={{ width: REFS_W }}>
+          {refs.map(ref => (
+            <span key={ref} className={`min-w-0 truncate rounded px-1.5 py-0 text-[10px] font-semibold leading-5 ${refClassName(ref, selected)}`}>
+              {cleanRef(ref)}
+            </span>
+          ))}
+          {hasExtraRefs && <span className={`rounded px-1 py-0 text-[10px] leading-5 ${selected ? 'bg-white/15 text-white' : 'bg-slate-700 text-slate-300'}`}>+{row.commit.refs.length - refs.length}</span>}
+        </div>
+
+        <div className="shrink-0 overflow-hidden px-2" style={{ width: GRAPH_W + 16 }}>
           <svg width={GRAPH_W} height={ROW_H} className="block overflow-hidden">
-            {visibleLines.map((ln, i) => {
-              const x1 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.fromLane)));
-              const x2 = Math.max(0, Math.min(GRAPH_W, xForLane(ln.toLane)));
-              const y1 = ln.pos === 'bottom' ? cy : 0;
-              const y2 = ln.pos === 'top' ? cy : ROW_H;
-              return x1 === x2
-                ? <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={ln.color} strokeWidth={1.8} />
-                : <path key={i} d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`} fill="none" stroke={ln.color} strokeWidth={1.8} />;
+            {row.commit.parents.length > 0 && <line x1={cx} y1={cy} x2={cx} y2={ROW_H} stroke={row.color} strokeWidth={2} />}
+            {row.commit.graph.includes('|') && <line x1={cx} y1={0} x2={cx} y2={cy} stroke={row.color} strokeWidth={2} />}
+            {row.segments.map((segment, i) => {
+              const x = xForCol(segment.col);
+              if (segment.kind === 'vertical') {
+                return <line key={i} x1={x} y1={0} x2={x} y2={ROW_H} stroke={segment.color} strokeWidth={2} />;
+              }
+              if (segment.kind === 'slash') {
+                return <line key={i} x1={x + GRAPH_CHAR_W} y1={0} x2={x} y2={ROW_H} stroke={segment.color} strokeWidth={2} />;
+              }
+              if (segment.kind === 'backslash') {
+                return <line key={i} x1={x} y1={0} x2={x + GRAPH_CHAR_W} y2={ROW_H} stroke={segment.color} strokeWidth={2} />;
+              }
+              return <line key={i} x1={x} y1={cy} x2={x + GRAPH_CHAR_W} y2={cy} stroke={segment.color} strokeWidth={2} />;
             })}
             <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill={row.color} opacity={0.16} />
             <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
             {row.commit.head && <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill="none" stroke={row.color} strokeWidth={1.5} />}
           </svg>
         </div>
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 pr-3">
-          {row.commit.refs.slice(0, 3).map(ref => (
-            <span key={ref} className={`shrink-0 rounded px-1.5 py-0 text-[10px] font-semibold ${selected ? 'bg-white/20 text-white' : ref.includes('origin') ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
-              {ref.replace('HEAD -> ', '').replace('tag: ', '')}
-            </span>
-          ))}
-          <span className={`truncate text-sm ${selected ? 'text-white' : 'text-slate-100'}`}>{row.commit.message}</span>
+
+        <div className={`min-w-0 flex-1 truncate pr-3 text-sm ${selected ? 'font-medium text-white' : 'font-normal text-slate-200'}`}>
+          {row.commit.message}
         </div>
       </div>
 
-      <div className="flex min-w-0 items-center gap-2 px-3">
-        <span className={`h-5 w-5 shrink-0 rounded bg-slate-700 text-center text-[10px] font-semibold leading-5 ${selected ? 'text-white' : 'text-slate-300'}`}>
+      <div className={`flex min-w-0 items-center gap-2 border-l border-pilot-line/80 px-3 text-xs ${selected ? 'text-white' : 'text-slate-400'}`}>
+        <span className={`h-5 w-5 shrink-0 rounded text-center text-[10px] font-semibold leading-5 ${selected ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-300'}`}>
           {row.commit.author.slice(0, 1).toUpperCase()}
         </span>
-        <span className="truncate text-sm">{row.commit.author}</span>
+        <span className="min-w-0 flex-1 truncate">{row.commit.author}</span>
+        <span className={`font-mono ${selected ? 'text-white' : 'text-slate-500'}`}>{row.commit.shortHash}</span>
+        <span className="hidden truncate text-slate-500 xl:block">{row.commit.date}</span>
       </div>
-      <div className="truncate px-3 font-mono text-sm">{row.commit.shortHash}</div>
-      <div className="truncate px-3 text-sm">{row.commit.date}</div>
     </button>
   );
 });
@@ -166,8 +157,10 @@ export function GitGraph() {
   const selectCommit = useGitStore(s => s.selectCommit);
   const historyLimit = useGitStore(s => s.historyLimit);
   const historyFilters = useGitStore(s => s.historyFilters);
+  const currentBranch = useGitStore(s => s.status.currentBranch || s.repo?.currentBranch || 'current branch');
   const loadHistory = useGitStore(s => s.loadHistory);
   const run = useGitStore(s => s.run);
+  const log = useGitStore(s => s.log);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<HistoryFilters>(historyFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -190,7 +183,7 @@ export function GitGraph() {
 
   const rows = useMemo(() => buildRows(history), [history]);
   const authors = useMemo(() => Array.from(new Set(history.map(c => c.author))).sort(), [history]);
-  const refs = useMemo(() => Array.from(new Set(history.flatMap(c => c.refs.map(r => r.replace('HEAD -> ', '').replace('tag: ', ''))))).sort(), [history]);
+  const refs = useMemo(() => Array.from(new Set(history.flatMap(c => c.refs.map(cleanRef)))).sort(), [history]);
   const visibleRows = useMemo(() => rows.filter(row => matchesCommit(row.commit, search)), [rows, search]);
   const hasFilter = Boolean(search || filters.branch || filters.author || filters.since || filters.until || filters.keyword || filters.filePath);
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
@@ -204,6 +197,100 @@ export function GitGraph() {
     const revision = commitRevision(commit);
     if (!repo || !revision) return;
     void run(label, () => fn(revision));
+  };
+  const separator = (label: string): ContextMenuItem => ({ label, separator: true, action: () => undefined });
+  const copyText = (label: string, value: string) => {
+    if (!value) return;
+    void navigator.clipboard.writeText(value).then(() => log(`${label}: ${value}`)).catch(() => log(value));
+  };
+  const commitMenuItems = (commit: CommitInfo): ContextMenuItem[] => {
+    const revision = commitRevision(commit);
+    const short = commit.shortHash || revision.slice(0, 8);
+    return [
+      {
+        label: 'Checkout this commit',
+        action: () => {
+          if (confirm(`Checkout ${short} in detached HEAD?`)) runCommitAction('checkout commit', commit, rev => gitService.checkoutCommit(repo!, rev));
+        },
+      },
+      {
+        label: 'Create worktree from this commit',
+        action: () => {
+          const path = ask('Worktree path', `../worktree-${short}`);
+          if (path) runCommitAction('create worktree', commit, rev => gitService.createWorktree(repo!, path, rev, false));
+        },
+      },
+      separator('commit-actions'),
+      {
+        label: 'Create branch here',
+        action: () => {
+          const name = ask('New branch name', `branch-${short}`);
+          if (name) runCommitAction('branch from commit', commit, rev => gitService.createBranchFromCommit(repo!, name, rev, true));
+        },
+      },
+      {
+        label: 'Cherry pick commit',
+        action: () => runCommitAction('cherry-pick', commit, rev => gitService.cherryPickCommit(repo!, rev)),
+      },
+      {
+        label: `Rebase ${currentBranch} onto this commit`,
+        action: () => {
+          if (confirm(`Rebase ${currentBranch} onto ${short}?`)) runCommitAction('rebase', commit, rev => gitService.startRebase(repo!, rev));
+        },
+      },
+      {
+        label: `Reset ${currentBranch} to this commit: soft`,
+        action: () => {
+          if (confirm(`Soft reset ${currentBranch} to ${short}?`)) runCommitAction('soft reset', commit, rev => gitService.resetToCommit(repo!, rev, 'soft'));
+        },
+      },
+      {
+        label: `Reset ${currentBranch} to this commit: mixed`,
+        action: () => {
+          if (confirm(`Mixed reset ${currentBranch} to ${short}?`)) runCommitAction('mixed reset', commit, rev => gitService.resetToCommit(repo!, rev, 'mixed'));
+        },
+      },
+      {
+        label: `Reset ${currentBranch} to this commit: hard`,
+        danger: true,
+        action: () => {
+          if (confirm(`Hard reset ${currentBranch} to ${short}? This can discard work.`)) runCommitAction('hard reset', commit, rev => gitService.resetToCommit(repo!, rev, 'hard'));
+        },
+      },
+      {
+        label: 'Revert commit',
+        danger: true,
+        action: () => {
+          if (confirm(`Revert ${short}?`)) runCommitAction('revert commit', commit, rev => gitService.revertCommit(repo!, rev));
+        },
+      },
+      separator('copy-patch'),
+      {
+        label: 'Copy commit sha',
+        action: () => copyText('Copied commit sha', revision),
+      },
+      {
+        label: 'Create patch from commit',
+        action: () => runCommitAction('create patch', commit, rev => gitService.createPatchFromCommit(repo!, rev)),
+      },
+      separator('tag-actions'),
+      {
+        label: 'Create tag here',
+        action: () => {
+          const name = ask('New tag name', `tag-${short}`);
+          if (name) runCommitAction('tag commit', commit, rev => gitService.createTagFromCommit(repo!, name, rev));
+        },
+      },
+      {
+        label: 'Create annotated tag here',
+        action: () => {
+          const name = ask('New annotated tag name', `tag-${short}`);
+          if (!name) return;
+          const message = ask('Tag message', name);
+          if (message) runCommitAction('annotated tag commit', commit, rev => gitService.createAnnotatedTagFromCommit(repo!, name, message, rev));
+        },
+      },
+    ];
   };
 
   useEffect(() => {
@@ -273,11 +360,13 @@ export function GitGraph() {
       </div>
 
       <div ref={listRef} className="min-h-0 flex-1 select-none overflow-auto [overflow-anchor:none]" onScroll={e => setScrollTop(e.currentTarget.scrollTop)}>
-        <div className={`sticky top-0 z-10 grid select-none ${HISTORY_GRID} border-b border-pilot-line bg-[#20262a] text-[11px] font-bold uppercase tracking-wide text-slate-400`}>
-          <div className="px-16 py-2">Graph & Subject</div>
-          <div className="border-l border-pilot-line px-3 py-2">Author</div>
-          <div className="border-l border-pilot-line px-3 py-2">SHA</div>
-          <div className="border-l border-pilot-line px-3 py-2">Commit Time</div>
+        <div className={`sticky top-0 z-10 grid select-none ${HISTORY_GRID} border-b border-pilot-line bg-[#151b24] text-[10px] font-bold uppercase tracking-wide text-slate-500`}>
+          <div className="flex min-w-0 items-center">
+            <div className="px-2 py-2" style={{ width: REFS_W }}>Branch / Tag</div>
+            <div className="px-2 py-2" style={{ width: GRAPH_W + 16 }}>Graph</div>
+            <div className="min-w-0 flex-1 px-3 py-2">Commit Message</div>
+          </div>
+          <div className="border-l border-pilot-line px-3 py-2">Details</div>
         </div>
         <div className="relative" style={{ height: totalListHeight }}>
           {renderedRows.map((row, i) => {
@@ -310,58 +399,7 @@ export function GitGraph() {
           y={menu.y}
           title={menu.commit.shortHash}
           onClose={() => setMenu(undefined)}
-          items={[
-            {
-              label: 'Create branch here',
-              action: () => {
-                const name = ask('New branch name', `branch-${menu.commit.shortHash}`);
-                if (name) runCommitAction('branch from commit', menu.commit, revision => gitService.createBranchFromCommit(repo!, name, revision, true));
-              },
-            },
-            {
-              label: 'Create tag here',
-              action: () => {
-                const name = ask('New tag name', `tag-${menu.commit.shortHash}`);
-                if (name) runCommitAction('tag commit', menu.commit, revision => gitService.createTagFromCommit(repo!, name, revision));
-              },
-            },
-            {
-              label: 'Cherry-pick commit',
-              action: () => runCommitAction('cherry-pick', menu.commit, revision => gitService.cherryPickCommit(repo!, revision)),
-            },
-            {
-              label: 'Revert commit',
-              danger: true,
-              action: () => {
-                if (confirm(`Revert ${menu.commit.shortHash}?`)) runCommitAction('revert commit', menu.commit, revision => gitService.revertCommit(repo!, revision));
-              },
-            },
-            {
-              label: 'Checkout commit',
-              action: () => {
-                if (confirm(`Checkout ${menu.commit.shortHash} in detached HEAD?`)) runCommitAction('checkout commit', menu.commit, revision => gitService.checkoutCommit(repo!, revision));
-              },
-            },
-            {
-              label: 'Reset current branch: soft',
-              action: () => {
-                if (confirm(`Soft reset current branch to ${menu.commit.shortHash}?`)) runCommitAction('soft reset', menu.commit, revision => gitService.resetToCommit(repo!, revision, 'soft'));
-              },
-            },
-            {
-              label: 'Reset current branch: mixed',
-              action: () => {
-                if (confirm(`Mixed reset current branch to ${menu.commit.shortHash}?`)) runCommitAction('mixed reset', menu.commit, revision => gitService.resetToCommit(repo!, revision, 'mixed'));
-              },
-            },
-            {
-              label: 'Reset current branch: hard',
-              danger: true,
-              action: () => {
-                if (confirm(`Hard reset current branch to ${menu.commit.shortHash}? This can discard work.`)) runCommitAction('hard reset', menu.commit, revision => gitService.resetToCommit(repo!, revision, 'hard'));
-              },
-            },
-          ]}
+          items={commitMenuItems(menu.commit)}
         />
       )}
     </div>

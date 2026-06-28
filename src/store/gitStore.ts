@@ -97,6 +97,7 @@ export const useGitStore = create<State>((set, get) => ({
   openRepo: async path => {
     set({
       busy: true,
+      repo: undefined,
       status: empty,
       branches: [],
       remotes: [],

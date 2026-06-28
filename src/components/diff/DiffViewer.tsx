@@ -10,13 +10,7 @@ export function DiffViewer() {
   const canShowSplit = Boolean(diff?.patch || diff?.oldText || diff?.newText);
   const viewMode = mode === 'side' ? 'split' : 'unified';
 
-  if (!diff) {
-    return (
-      <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-slate-500">
-        Select a changed file or commit file to view its diff.
-      </div>
-    );
-  }
+  if (!diff) return null;
 
   if (diff.binary) {
     return (

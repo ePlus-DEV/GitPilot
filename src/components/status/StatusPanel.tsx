@@ -15,8 +15,10 @@ export function StatusPanel() {
     status.untracked.length +
     status.conflicted.length;
 
+  if (total === 0) return null;
+
   return (
-    <section className={`flex shrink-0 flex-col overflow-hidden border-b border-pilot-line bg-pilot-panel ${total === 0 ? 'h-[62px]' : 'h-[34%] min-h-[168px] max-h-[280px]'}`}>
+    <section className="flex h-[34%] min-h-[168px] max-h-[280px] shrink-0 flex-col overflow-hidden border-b border-pilot-line bg-pilot-panel">
       <div className="flex items-center justify-between gap-3 border-b border-pilot-line px-3 py-2">
         <div className="min-w-0">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Changes</h2>
