@@ -3,7 +3,7 @@ import { demoHistory, demoRepo, demoStatus } from '../demo/currentRepoDemo';
 import type {AiResponse,BranchInfo,CommitFile,CommitInfo,CommitGraphRow,ConflictFileData,DiffResult,GitCommandOutput,GitStatus,ParsedConflictFile,RemoteInfo,RepositoryInfo,Settings,StashInfo,TagInfo,HistoryFilters,RebaseState,RebaseTodoItem,BlameLine,WorktreeInfo,SearchResult,ReflogEntry,SubmoduleInfo,BisectState} from '../types/git';
 
 const isTauriRuntime=()=>typeof window!=='undefined'&&'__TAURI_INTERNALS__' in window;
-const demoSettings={theme:'dark',gitPath:'git',defaultTargetBranch:'main',recentRepositories:[demoRepo.path],aiProvider:'ollama',aiApiKey:'',aiModel:'',validationCommands:[],shortcuts:[]};
+const demoSettings={theme:'dark',gitPath:'git',defaultTargetBranch:'main',recentRepositories:[demoRepo.path],aiProvider:'ollama',aiApiKey:'',aiModel:'',validationCommands:[],shortcuts:[],autoFetchInterval:0};
 const demoCommitFiles:CommitFile[]=[
  {status:'M',path:'src/App.tsx'},
  {status:'M',path:'src/components/graph/GitGraph.tsx'},

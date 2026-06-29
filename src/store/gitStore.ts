@@ -1,5 +1,20 @@
 import { create } from 'zustand';
 import { gitService } from '../services/gitService';
+
+let _autoFetchTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startAutoFetch(intervalSeconds: number) {
+  if (_autoFetchTimer) { clearInterval(_autoFetchTimer); _autoFetchTimer = null; }
+  if (intervalSeconds <= 0) return;
+  _autoFetchTimer = setInterval(async () => {
+    const { repo, fetchAll } = useGitStore.getState();
+    if (repo) await fetchAll();
+  }, intervalSeconds * 1000);
+}
+
+export function stopAutoFetch() {
+  if (_autoFetchTimer) { clearInterval(_autoFetchTimer); _autoFetchTimer = null; }
+}
 import type {
   BranchInfo,
   CommitFile,
@@ -128,6 +143,8 @@ export const useGitStore = create<State>((set, get) => ({
       await get().refresh();
       // Background fetch — updates remote tracking refs silently after initial load
       void gitService.fetchAll(path).then(() => get().refresh()).catch(() => {});
+      const interval = get().settings?.autoFetchInterval ?? 0;
+      startAutoFetch(interval);
     } catch (e) {
       get().log(String((e as Error).message ?? e));
     } finally {
@@ -135,26 +152,29 @@ export const useGitStore = create<State>((set, get) => ({
     }
   },
 
-  closeRepo: () => set({
-    repo: undefined,
-    status: empty,
-    branches: [],
-    remotes: [],
-    history: [],
-    graphData: [],
-    commitFiles: [],
-    commitFilesLoading: false,
-    commitFilesError: undefined,
-    stashes: [],
-    tags: [],
-    selectedFile: undefined,
-    selectedCommit: undefined,
-    diff: undefined,
-    conflict: undefined,
-    aiText: '',
-    busy: false,
-    historyFilters: {},
-  }),
+  closeRepo: () => {
+    stopAutoFetch();
+    set({
+      repo: undefined,
+      status: empty,
+      branches: [],
+      remotes: [],
+      history: [],
+      graphData: [],
+      commitFiles: [],
+      commitFilesLoading: false,
+      commitFilesError: undefined,
+      stashes: [],
+      tags: [],
+      selectedFile: undefined,
+      selectedCommit: undefined,
+      diff: undefined,
+      conflict: undefined,
+      aiText: '',
+      busy: false,
+      historyFilters: {},
+    });
+  },
 
   refresh: async () => {
     const repo = get().repo;

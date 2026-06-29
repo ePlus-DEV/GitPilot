@@ -15,7 +15,7 @@ export type TagInfo={name:string;target:string;message:string};
 export type ConflictBlock={id:number;startLine:number;separatorLine:number;endLine:number;current:string;incoming:string};
 export type ParsedConflictFile={path:string;content:string;blocks:ConflictBlock[];hasMarkers:boolean};
 export type ConflictFileData={path:string;ancestorContent:string|null;oursContent:string|null;theirsContent:string|null;workingContent:string;isBinary:boolean;lineEnding:string};
-export type Settings={theme:string;gitPath:string;defaultTargetBranch:string;recentRepositories:string[];aiProvider:string;aiApiKey:string;aiModel:string;validationCommands:string[];shortcuts:string[]};
+export type Settings={theme:string;gitPath:string;defaultTargetBranch:string;recentRepositories:string[];aiProvider:string;aiApiKey:string;aiModel:string;validationCommands:string[];shortcuts:string[];autoFetchInterval:number};
 export type AiResponse={text:string;requiresReview:boolean};
 
 export type RebaseTodoItem={action:string;hash:string;message:string};

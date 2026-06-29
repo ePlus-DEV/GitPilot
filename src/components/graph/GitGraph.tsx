@@ -1,5 +1,4 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { ChevronDown, Cloud, EyeOff, GitCommitHorizontal, Monitor, Pencil, RefreshCw, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
@@ -62,11 +61,11 @@ function cleanRef(ref: string) {
 
 const laneX = (col: number) => PAD_LEFT + Math.max(0, col) * LANE_W;
 
-/** Bezier curve from (x1, yMid) to (x2, yEnd) — used for merge/fork edges. */
+/** Bezier curve from (x1, yMid) to (x2, yEnd) — immediately diverges horizontally to avoid overlap with straight lane lines. */
 function edgePath(x1: number, x2: number, yMid: number, yEnd: number): string {
   if (x1 === x2) return `M ${x1} ${yMid} L ${x1} ${yEnd}`;
-  const ctrl = yMid + (yEnd - yMid) * 0.6;
-  return `M ${x1} ${yMid} C ${x1} ${ctrl} ${x2} ${ctrl} ${x2} ${yEnd}`;
+  const mx = (x1 + x2) / 2;
+  return `M ${x1} ${yMid} C ${mx} ${yMid} ${mx} ${yEnd} ${x2} ${yEnd}`;
 }
 
 function GraphSvg({ row, height }: { row: RowData; height: number }) {
@@ -98,39 +97,27 @@ function GraphSvg({ row, height }: { row: RowData; height: number }) {
           strokeWidth={STROKE_W} strokeLinecap="round" />
       ))}
 
-      {/* Lines continuing to the row below (bottom half) */}
-      {g.bottomLines.map(([col, ci], i) => (
-        <line key={`b${i}`}
-          x1={laneX(col)} y1={cy} x2={laneX(col)} y2={height}
-          stroke={LANE_COLORS[ci % LANE_COLORS.length]}
-          strokeWidth={STROKE_W} strokeLinecap="round" />
-      ))}
-
-      {/* Bezier edges: merge convergences and fork divergences.
-          Fork edge (fromCol still has a straight bottomLine) → start BELOW the dot
-          so the primary straight line and the fork curve don't share the same origin.
-          Convergence edge (fromCol has no bottomLine) → start AT the dot (commit IS the endpoint). */}
+      {/* Lines continuing to the row below (bottom half).
+          Skip target columns of edge beziers — the bezier itself covers that visual. */}
       {(() => {
-        const bottomCols = new Set(g.bottomLines.map(([c]) => c));
-        return g.edges.map(([fromCol, toCol, ci], i) => {
-          const isFork = bottomCols.has(fromCol);
-          const yStart = isFork ? cy + CIRCLE_R + 1 : cy;
-          return (
-            <path key={`e${i}`}
-              d={edgePath(laneX(fromCol), laneX(toCol), yStart, height)}
+        const edgeTargetCols = new Set(g.edges.map(([, toCol]) => toCol));
+        return g.bottomLines
+          .filter(([col]) => !edgeTargetCols.has(col))
+          .map(([col, ci], i) => (
+            <line key={`b${i}`}
+              x1={laneX(col)} y1={cy} x2={laneX(col)} y2={height}
               stroke={LANE_COLORS[ci % LANE_COLORS.length]}
-              strokeWidth={STROKE_W} fill="none" strokeLinecap="round" />
-          );
-        });
+              strokeWidth={STROKE_W} strokeLinecap="round" />
+          ));
       })()}
 
-      {/* Horizontal connector: badge column → commit node (branch tips only) */}
-      {row.commit.refs.length > 0 && cx > PAD_LEFT && (
-        <line
-          x1={0} y1={cy} x2={cx - CIRCLE_R - 1} y2={cy}
-          stroke={nodeColor} strokeWidth={1} strokeLinecap="round" opacity={0.45}
-        />
-      )}
+      {/* Bezier edges — immediately diverge horizontally so they don't overlap the straight continuation line */}
+      {g.edges.map(([fromCol, toCol, ci], i) => (
+        <path key={`e${i}`}
+          d={edgePath(laneX(fromCol), laneX(toCol), cy, height)}
+          stroke={LANE_COLORS[ci % LANE_COLORS.length]}
+          strokeWidth={STROKE_W} fill="none" strokeLinecap="round" />
+      ))}
 
       {/* Commit node — larger transparent hit-area for hover tooltip */}
       <g>
@@ -180,32 +167,10 @@ function ChangesBar({ ins, del, maxTotal }: { ins: number; del: number; maxTotal
   );
 }
 
-type BranchTip = { x: number; y: number; text: string; color: string };
-
-function BranchTooltip({ tip }: { tip: BranchTip }) {
-  return createPortal(
-    <div
-      className="pointer-events-none fixed z-[9999] whitespace-nowrap rounded px-2.5 py-1 text-[11px] font-semibold shadow-xl"
-      style={{
-        left: tip.x + 8,
-        top: tip.y,
-        transform: 'translateY(-50%)',
-        background: '#2d333b',
-        color: tip.color,
-        border: `1px solid ${tip.color}60`,
-      }}
-    >
-      {tip.text}
-    </div>,
-    document.body,
-  );
-}
-
 function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
   const laneColor = row.graph
     ? LANE_COLORS[row.graph.colorIndex % LANE_COLORS.length]
     : LANE_COLORS[0];
-  const [tip, setTip] = useState<BranchTip | null>(null);
 
   const allRefs = row.commit.refs;
   if (allRefs.length === 0) return <div className="shrink-0" style={{ width: BRANCH_COL_W }} />;
@@ -239,55 +204,43 @@ function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
   const badgeText = selected ? '#ffffff' : laneColor;
   const badgeBorder = selected ? `1px solid ${laneColor}cc` : `1px solid ${laneColor}70`;
 
-  const showTip = (e: React.MouseEvent, text: string, color: string) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setTip({ x: r.right, y: r.top + r.height / 2, text, color });
-  };
-
   return (
-    <>
-      <div
-        className="flex shrink-0 items-center justify-end gap-0.5 overflow-hidden px-1"
-        style={{ width: BRANCH_COL_W }}
-        onMouseLeave={() => setTip(null)}
-      >
-        {isHead && (
-          <span className="shrink-0 text-[11px] font-bold leading-none text-yellow-400">✓</span>
-        )}
-        {showGroups.map(g => (
-          <span
-            key={g.name}
-            className="flex min-w-0 shrink-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
-            style={{ maxWidth: 138, background: badgeBg, color: badgeText, border: badgeBorder }}
-            onMouseEnter={e => showTip(e, g.name, laneColor)}
-          >
-            <span className="min-w-0 truncate">{g.name}</span>
-            {g.local && <Monitor size={10} className="shrink-0 opacity-80" />}
-            {g.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
-          </span>
-        ))}
-        {showTags.map(tag => (
-          <span
-            key={tag}
-            className="flex min-w-0 shrink-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
-            style={{ maxWidth: 138, background: '#a78bfa38', color: '#c4b5fd', border: '1px solid #a78bfa70' }}
-            onMouseEnter={e => showTip(e, tag, '#a78bfa')}
-          >
-            <span className="min-w-0 truncate">{tag}</span>
-            <Tag size={10} className="shrink-0 opacity-80" />
-          </span>
-        ))}
-        {extra > 0 && (
-          <span
-            className="shrink-0 cursor-default rounded px-0.5 text-[9px] text-slate-500"
-            onMouseEnter={e => showTip(e, allNames, '#94a3b8')}
-          >
-            +{extra}
-          </span>
-        )}
-      </div>
-      {tip && <BranchTooltip tip={tip} />}
-    </>
+    <div
+      className="flex shrink-0 items-center justify-end gap-0.5 overflow-hidden px-1"
+      style={{ width: BRANCH_COL_W }}
+    >
+      {isHead && (
+        <span className="shrink-0 text-[11px] font-bold leading-none text-yellow-400">✓</span>
+      )}
+      {showGroups.map(g => (
+        <span
+          key={g.name}
+          title={g.name}
+          className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
+          style={{ maxWidth: 138, background: badgeBg, color: badgeText, border: badgeBorder }}
+        >
+          <span className="min-w-0 truncate">{g.name}</span>
+          {g.local && <Monitor size={10} className="shrink-0 opacity-80" />}
+          {g.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
+        </span>
+      ))}
+      {showTags.map(tag => (
+        <span
+          key={tag}
+          title={tag}
+          className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
+          style={{ maxWidth: 138, background: '#a78bfa38', color: '#c4b5fd', border: '1px solid #a78bfa70' }}
+        >
+          <span className="min-w-0 truncate">{tag}</span>
+          <Tag size={10} className="shrink-0 opacity-80" />
+        </span>
+      ))}
+      {extra > 0 && (
+        <span title={allNames} className="shrink-0 cursor-default rounded px-0.5 text-[9px] text-slate-500">
+          +{extra}
+        </span>
+      )}
+    </div>
   );
 }
 
