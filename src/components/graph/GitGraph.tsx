@@ -4,7 +4,7 @@ import { ChevronDown, EyeOff, GitCommitHorizontal, Pencil, Search, SlidersHorizo
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
-import type { CommitInfo, HistoryFilters } from '../../types/git';
+import type { CommitGraphRow, CommitInfo, HistoryFilters } from '../../types/git';
 
 const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
 const ROW_H = 34;
@@ -23,39 +23,10 @@ const HASH_W = 64;
 const CHANGES_W = 90;
 const LOAD_MORE_H = 58;
 
-type GraphSegment = {
-  kind: 'vertical' | 'slash' | 'backslash' | 'horizontal';
-  col: number;
-  color: string;
-};
-
 type RowData = {
   commit: CommitInfo;
-  nodeCol: number;
-  color: string;
-  segments: GraphSegment[];
+  graph: CommitGraphRow | null;
 };
-
-function buildRows(commits: CommitInfo[]): RowData[] {
-  return commits.map(commit => {
-    const graph = commit.graph || '*';
-    const chars = Array.from(graph.slice(0, MAX_GRAPH_CHARS));
-    const rawNodeCol = chars.findIndex(ch => ch === '*');
-    const nodeCol = rawNodeCol >= 0 ? rawNodeCol : 0;
-    const colorForCol = (col: number) => LANE_COLORS[Math.floor(Math.max(0, col) / 2) % LANE_COLORS.length];
-    const color = colorForCol(nodeCol);
-    const segments: GraphSegment[] = [];
-
-    chars.forEach((ch, col) => {
-      if (ch === '|') segments.push({ kind: 'vertical', col, color: colorForCol(col) });
-      else if (ch === '/') segments.push({ kind: 'slash', col, color: colorForCol(col + 1) });
-      else if (ch === '\\') segments.push({ kind: 'backslash', col, color: colorForCol(col) });
-      else if (ch === '_' || ch === '-') segments.push({ kind: 'horizontal', col, color });
-    });
-
-    return { commit, nodeCol, color, segments };
-  });
-}
 
 function relativeDate(dateStr: string): string {
   if (!dateStr) return '';
@@ -94,65 +65,75 @@ function refClassName(ref: string, selected: boolean) {
   return 'bg-teal-500/15 text-teal-200';
 }
 
-const laneX = (charCol: number) => PAD_LEFT + Math.floor(Math.max(0, charCol) / 2) * LANE_W;
+const laneX = (col: number) => PAD_LEFT + Math.max(0, col) * LANE_W;
 
-function transPath(x1: number, x2: number, h: number): string {
-  if (x1 === x2) return `M ${x1} 0 L ${x1} ${h}`;
-  const bend = h * 0.38;
-  return `M ${x1} 0 L ${x1} ${bend} C ${x1} ${h / 2} ${x2} ${h / 2} ${x2} ${h - bend} L ${x2} ${h}`;
+/** Bezier curve from (x1, yMid) to (x2, yEnd) — used for merge/fork edges. */
+function edgePath(x1: number, x2: number, yMid: number, yEnd: number): string {
+  if (x1 === x2) return `M ${x1} ${yMid} L ${x1} ${yEnd}`;
+  const ctrl = yMid + (yEnd - yMid) * 0.6;
+  return `M ${x1} ${yMid} C ${x1} ${ctrl} ${x2} ${ctrl} ${x2} ${yEnd}`;
 }
 
 function GraphSvg({ row, height }: { row: RowData; height: number }) {
   const cy = height / 2;
-  const cx = laneX(row.nodeCol);
+  const g = row.graph;
+
+  if (!g) {
+    // Fallback: minimal dot when no graph data is available yet
+    const cx = PAD_LEFT;
+    return (
+      <svg width={GRAPH_W} height={height} className="block overflow-hidden" shapeRendering="geometricPrecision">
+        <circle cx={cx} cy={cy} r={CIRCLE_R} fill={LANE_COLORS[0]} />
+        <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
+        <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={LANE_COLORS[0]} opacity={0.5} />
+      </svg>
+    );
+  }
+
+  const cx = laneX(g.lane);
+  const nodeColor = LANE_COLORS[g.colorIndex % LANE_COLORS.length];
 
   return (
     <svg width={GRAPH_W} height={height} className="block overflow-hidden" shapeRendering="geometricPrecision">
-      {row.segments.map((seg, i) => {
-        if (seg.kind === 'vertical') {
-          const x = laneX(seg.col);
-          return (
-            <line key={i} x1={x} y1={0} x2={x} y2={height}
-              stroke={seg.color} strokeWidth={STROKE_W} strokeLinecap="square" />
-          );
-        }
-        if (seg.kind === 'backslash') {
-          const xa = laneX(seg.col - 1);
-          const xb = laneX(seg.col + 1);
-          return (
-            <path key={i} d={transPath(xa, xb, height)}
-              stroke={seg.color} strokeWidth={STROKE_W} fill="none" strokeLinecap="square" />
-          );
-        }
-        if (seg.kind === 'slash') {
-          const xa = laneX(seg.col + 1);
-          const xb = laneX(seg.col - 1);
-          return (
-            <path key={i} d={transPath(xa, xb, height)}
-              stroke={seg.color} strokeWidth={STROKE_W} fill="none" strokeLinecap="square" />
-          );
-        }
-        const x = laneX(seg.col);
-        return (
-          <line key={i} x1={x} y1={cy} x2={laneX(seg.col + 2)} y2={cy}
-            stroke={seg.color} strokeWidth={STROKE_W} strokeLinecap="square" />
-        );
-      })}
+      {/* Lines entering from the row above (top half) */}
+      {g.topLines.map(([col, ci], i) => (
+        <line key={`t${i}`}
+          x1={laneX(col)} y1={0} x2={laneX(col)} y2={cy}
+          stroke={LANE_COLORS[ci % LANE_COLORS.length]}
+          strokeWidth={STROKE_W} strokeLinecap="round" />
+      ))}
 
-      {row.commit.parents.length > 0 && (
-        <line x1={cx} y1={cy} x2={cx} y2={height}
-          stroke={row.color} strokeWidth={STROKE_W} strokeLinecap="square" />
-      )}
-      {row.commit.graph.includes('|') && (
-        <line x1={cx} y1={0} x2={cx} y2={cy}
-          stroke={row.color} strokeWidth={STROKE_W} strokeLinecap="square" />
-      )}
+      {/* Lines continuing to the row below (bottom half) */}
+      {g.bottomLines.map(([col, ci], i) => (
+        <line key={`b${i}`}
+          x1={laneX(col)} y1={cy} x2={laneX(col)} y2={height}
+          stroke={LANE_COLORS[ci % LANE_COLORS.length]}
+          strokeWidth={STROKE_W} strokeLinecap="round" />
+      ))}
 
-      <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
+      {/* Bezier edges: merge convergences and fork divergences */}
+      {g.edges.map(([fromCol, toCol, ci], i) => (
+        <path key={`e${i}`}
+          d={edgePath(laneX(fromCol), laneX(toCol), cy, height)}
+          stroke={LANE_COLORS[ci % LANE_COLORS.length]}
+          strokeWidth={STROKE_W} fill="none" strokeLinecap="round" />
+      ))}
+
+      {/* Commit node */}
+      <circle cx={cx} cy={cy} r={CIRCLE_R} fill={nodeColor} />
       <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
-      <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={row.color} opacity={0.5} />
-      {row.commit.head && (
-        <circle cx={cx} cy={cy} r={CIRCLE_R + 2} fill="none" stroke={row.color} strokeWidth={1.5} opacity={0.7} />
+      <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={nodeColor} opacity={0.5} />
+
+      {/* HEAD ring */}
+      {g.isHead && (
+        <circle cx={cx} cy={cy} r={CIRCLE_R + 2}
+          fill="none" stroke={nodeColor} strokeWidth={1.5} opacity={0.8} />
+      )}
+
+      {/* Merge commit outer ring */}
+      {g.isMerge && !g.isHead && (
+        <circle cx={cx} cy={cy} r={CIRCLE_R + 1.5}
+          fill="none" stroke={nodeColor} strokeWidth={1} opacity={0.5} />
       )}
     </svg>
   );
@@ -282,6 +263,7 @@ const GraphRow = memo(function GraphRow({
 export function GitGraph() {
   const repo = useGitStore(s => s.repo?.path);
   const history = useGitStore(s => s.history);
+  const graphData = useGitStore(s => s.graphData);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const selectCommit = useGitStore(s => s.selectCommit);
   const historyLimit = useGitStore(s => s.historyLimit);
@@ -313,7 +295,13 @@ export function GitGraph() {
     return () => window.clearTimeout(id);
   }, [filters, historyFilters, historyLimit, loadHistory]);
 
-  const rows = useMemo(() => buildRows(history), [history]);
+  const rows = useMemo((): RowData[] => {
+    const graphMap = new Map(graphData.map(r => [r.sha, r]));
+    return history.map(commit => ({
+      commit,
+      graph: graphMap.get(commit.hash) ?? null,
+    }));
+  }, [history, graphData]);
   const authors = useMemo(() => Array.from(new Set(history.map(c => c.author))).sort(), [history]);
   const refs = useMemo(() => Array.from(new Set(history.flatMap(c => c.refs.map(cleanRef)))).sort(), [history]);
   const visibleRows = useMemo(() => rows.filter(row => matchesCommit(row.commit, search)), [rows, search]);

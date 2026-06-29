@@ -26,3 +26,16 @@ export type SearchResult={kind:string;title:string;subtitle:string;target:string
 export type ReflogEntry={selector:string;commit:string;subject:string};
 export type SubmoduleInfo={path:string;commit:string;branch?:string|null;status:string};
 export type BisectState={inProgress:boolean;current?:string|null;log:string[]};
+
+export type GraphRef={name:string;refType:string;fullName:string};
+export type CommitGraphRow={
+  sha:string;shortSha:string;message:string;
+  authorName:string;authorEmail:string;timestamp:number;
+  parents:string[];refs:GraphRef[];
+  lane:number;colorIndex:number;
+  isMerge:boolean;isHead:boolean;
+  topLines:[number,number][];     // [column, colorIndex]
+  bottomLines:[number,number][];  // [column, colorIndex]
+  edges:[number,number,number][]; // [fromCol, toCol, colorIndex]
+  numCols:number;
+};

@@ -88,7 +88,8 @@ pub fn run() {
             commands::maintenance::start_bisect,
             commands::maintenance::mark_bisect,
             commands::maintenance::reset_bisect,
-            commands::maintenance::get_bisect_state
+            commands::maintenance::get_bisect_state,
+            commands::graph::get_commit_graph
         ])
         .run(tauri::generate_context!())
         .expect("failed to run GitPilot");

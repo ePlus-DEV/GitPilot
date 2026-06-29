@@ -3,6 +3,7 @@ import { gitService } from '../services/gitService';
 import type {
   BranchInfo,
   CommitFile,
+  CommitGraphRow,
   CommitInfo,
   DiffResult,
   GitCommandOutput,
@@ -37,6 +38,7 @@ type State = {
   branches: BranchInfo[];
   remotes: RemoteInfo[];
   history: CommitInfo[];
+  graphData: CommitGraphRow[];
   commitFiles: CommitFile[];
   commitFilesLoading: boolean;
   commitFilesError?: string;
@@ -60,6 +62,7 @@ type State = {
   refresh: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   loadHistory: (filters?: HistoryFilters, limit?: number) => Promise<void>;
+  loadGraphData: (filters?: HistoryFilters, limit?: number) => Promise<void>;
   run: (label: string, fn: () => Promise<GitCommandOutput | GitCommandOutput[] | string | unknown>, refreshMode?: RefreshMode) => Promise<void>;
   setSelectedFile: (f: GitFileStatus, cached: boolean) => Promise<void>;
   selectCommit: (c: CommitInfo) => Promise<void>;
@@ -80,6 +83,7 @@ export const useGitStore = create<State>((set, get) => ({
   branches: [],
   remotes: [],
   history: [],
+  graphData: [],
   commitFiles: [],
   commitFilesLoading: false,
   commitFilesError: undefined,
@@ -104,6 +108,7 @@ export const useGitStore = create<State>((set, get) => ({
       branches: [],
       remotes: [],
       history: [],
+      graphData: [],
       commitFiles: [],
       commitFilesLoading: false,
       commitFilesError: undefined,
@@ -133,6 +138,7 @@ export const useGitStore = create<State>((set, get) => ({
     branches: [],
     remotes: [],
     history: [],
+    graphData: [],
     commitFiles: [],
     commitFilesLoading: false,
     commitFilesError: undefined,
@@ -152,17 +158,20 @@ export const useGitStore = create<State>((set, get) => ({
     if (!repo) return;
     set({ busy: true });
     try {
-      const [status, branches, remotes, history, stashes, tags, recent, settings] = await Promise.all([
+      const filters = get().historyFilters;
+      const limit = get().historyLimit;
+      const [status, branches, remotes, history, graphData, stashes, tags, recent, settings] = await Promise.all([
         gitService.getStatus(repo.path),
         gitService.listBranches(repo.path),
         gitService.listRemotes(repo.path),
-        gitService.getHistory(repo.path, get().historyLimit, get().historyFilters),
+        gitService.getHistory(repo.path, limit, filters),
+        gitService.getCommitGraph(repo.path, limit, filters.branch, true).catch(() => [] as import('../types/git').CommitGraphRow[]),
         gitService.listStashes(repo.path),
         gitService.listTags(repo.path),
         gitService.listRecentRepositories(),
         gitService.getSettings(),
       ]);
-      set({ status, branches, remotes, history, stashes, tags, recent, settings, repo: { ...repo, currentBranch: status.currentBranch } });
+      set({ status, branches, remotes, history, graphData, stashes, tags, recent, settings, repo: { ...repo, currentBranch: status.currentBranch } });
     } catch (e) {
       get().log(String((e as Error).message ?? e));
     } finally {
@@ -188,11 +197,28 @@ export const useGitStore = create<State>((set, get) => ({
     const nextLimit = limit ?? get().historyLimit;
     set({ busy: true, historyFilters: nextFilters, historyLimit: nextLimit });
     try {
-      set({ history: await gitService.getHistory(repo.path, nextLimit, nextFilters) });
+      const [history, graphData] = await Promise.all([
+        gitService.getHistory(repo.path, nextLimit, nextFilters),
+        gitService.getCommitGraph(repo.path, nextLimit, nextFilters.branch, true).catch(() => [] as import('../types/git').CommitGraphRow[]),
+      ]);
+      set({ history, graphData });
     } catch (e) {
       get().log(String((e as Error).message ?? e));
     } finally {
       set({ busy: false });
+    }
+  },
+
+  loadGraphData: async (filters, limit) => {
+    const repo = get().repo;
+    if (!repo) return;
+    const nextFilters = filters ?? get().historyFilters;
+    const nextLimit = limit ?? get().historyLimit;
+    try {
+      const graphData = await gitService.getCommitGraph(repo.path, nextLimit, nextFilters.branch, true);
+      set({ graphData });
+    } catch (e) {
+      get().log(String((e as Error).message ?? e));
     }
   },
 

@@ -197,3 +197,35 @@ pub struct BisectState {
     pub current: Option<String>,
     pub log: Vec<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphRef {
+    pub name: String,
+    pub ref_type: String, // "local" | "remote" | "tag" | "head"
+    pub full_name: String,
+}
+
+/// Per-row data returned by get_commit_graph.
+/// top_lines / bottom_lines: [column, color_index] pairs for straight lane lines.
+/// edges: [from_col, to_col, color_index] triples for bezier curves (merge/fork).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitGraphRow {
+    pub sha: String,
+    pub short_sha: String,
+    pub message: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub timestamp: i64,
+    pub parents: Vec<String>,
+    pub refs: Vec<GraphRef>,
+    pub lane: usize,
+    pub color_index: usize,
+    pub is_merge: bool,
+    pub is_head: bool,
+    pub top_lines: Vec<[usize; 2]>,
+    pub bottom_lines: Vec<[usize; 2]>,
+    pub edges: Vec<[usize; 3]>,
+    pub num_cols: usize,
+}
