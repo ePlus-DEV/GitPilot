@@ -13,9 +13,11 @@ import { GitGraph } from './components/graph/GitGraph';
 import { MergeConflictPanel } from './components/merge-conflict/MergeConflictPanel';
 import { AiPanel } from './components/ai/AiPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
+import { WelcomeScreen } from './components/welcome/WelcomeScreen';
 import { gitService } from './services/gitService';
 
 export function App() {
+  const repo = useGitStore(s => s.repo);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const conflict = useGitStore(s => s.conflict);
   const diff = useGitStore(s => s.diff);
@@ -62,9 +64,11 @@ export function App() {
 
   return (
     <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
-      <TopBar />
+      {settingsOpen && <SettingsPanel />}
+      {!repo && <WelcomeScreen />}
+      {repo && <TopBar />}
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      {repo && <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="min-h-0 shrink-0" style={{ width: sidebarWidth }}>
           <Sidebar />
         </div>
@@ -120,14 +124,13 @@ export function App() {
               {aiText && <AiPanel />}
             </div>
           )}
-          {settingsOpen && <SettingsPanel />}
         </aside>
-      </div>
+      </div>}
 
-      <ConsolePanel
+      {repo && <ConsolePanel
         height={consoleHeight}
         onResizeStart={startResize(event => setConsoleHeight(Math.min(360, Math.max(80, window.innerHeight - event.clientY))))}
-      />
+      />}
     </div>
   );
 }
