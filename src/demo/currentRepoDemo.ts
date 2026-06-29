@@ -1,4 +1,4 @@
-import type { CommitInfo, GitStatus, RepositoryInfo } from '../types/git';
+﻿import type { CommitInfo, GitStatus, RepositoryInfo } from '../types/git';
 
 export const demoRepo: RepositoryInfo = {
   "name": "GitPilot",
@@ -21,6 +21,8 @@ export const demoHistory: CommitInfo[] = [
     ],
     "message": "Merge pull request #8 from ePlus-DEV/codex/fix-missing-icon-file-error-kb9qnb",
     "head": true,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -34,6 +36,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Reduce headless app warning noise",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -47,6 +51,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Publish screenshot for inline PR preview",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -61,6 +67,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Merge pull request #5 from ePlus-DEV/codex/bo-sung-github-action-va-template",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -75,6 +83,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Merge pull request #6 from ePlus-DEV/codex/sua-loi-github-action",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -88,6 +98,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Fix CI dependency lock usage",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -101,6 +113,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "feat: enhance UI components and improve functionality",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -114,6 +128,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Remove --locked flag from cargo check command in CI workflow",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -127,6 +143,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "fix(ci): remove --locked flag from cargo check",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -140,6 +158,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Add GitHub workflow and contribution templates",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -154,6 +174,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Merge pull request #2 from ePlus-DEV/codex/create-gitpilot-desktop-client-mvp",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -167,6 +189,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Expand GitPilot into full desktop Git client",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -181,6 +205,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Merge pull request #1 from ePlus-DEV/codex/design-logo-for-gitpilot-git-client",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -194,6 +220,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Add GitPilot source scaffold",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   },
   {
@@ -205,6 +233,8 @@ export const demoHistory: CommitInfo[] = [
     "refs": [],
     "message": "Initialize repository",
     "head": false,
+    "insertions": 0,
+    "deletions": 0,
     "graph": ""
   }
 ];
@@ -223,3 +253,4 @@ export const demoStatus: GitStatus = {
     "conflictedFiles": []
   }
 };
+

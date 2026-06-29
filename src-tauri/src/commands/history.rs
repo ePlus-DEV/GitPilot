@@ -3,6 +3,35 @@ use crate::{
     services::git_service,
 };
 
+fn extract_stat(line: &str, keyword: &str) -> u32 {
+    if let Some(pos) = line.find(keyword) {
+        let before = line[..pos].trim_end();
+        let num_str: String = before.chars().rev().take_while(|c| c.is_ascii_digit()).collect();
+        if num_str.is_empty() { return 0; }
+        num_str.chars().rev().collect::<String>().parse().unwrap_or(0)
+    } else {
+        0
+    }
+}
+
+fn parse_stat_output(out: &str) -> std::collections::HashMap<String, (u32, u32)> {
+    let mut map = std::collections::HashMap::new();
+    let mut current_hash = String::new();
+    for line in out.lines() {
+        let t = line.trim();
+        if t.is_empty() { continue; }
+        if t.len() == 40 && t.chars().all(|c| c.is_ascii_hexdigit()) {
+            current_hash = t.to_string();
+        } else if !current_hash.is_empty() && (t.contains("file changed") || t.contains("files changed")) {
+            let ins = extract_stat(t, "insertion");
+            let del = extract_stat(t, "deletion");
+            map.insert(current_hash.clone(), (ins, del));
+            current_hash.clear();
+        }
+    }
+    map
+}
+
 fn parse_history_output(out: &str) -> Vec<CommitInfo> {
     out.lines()
         .filter_map(|l| {
@@ -37,6 +66,8 @@ fn parse_history_output(out: &str) -> Vec<CommitInfo> {
                 message: p[6].into(),
                 head: p[5].contains("HEAD"),
                 graph,
+                insertions: 0,
+                deletions: 0,
             })
         })
         .collect()
@@ -99,6 +130,18 @@ pub fn get_history(
     let branch_arg = branch.filter(|v| !v.trim().is_empty() && v != "all");
     let file_arg = file_path.filter(|v| !v.trim().is_empty());
 
+    // Clone formatted args for reuse in the stat command before consuming them
+    let stat_filter_args: Vec<String> = [
+        author_arg.as_deref(),
+        since_arg.as_deref(),
+        until_arg.as_deref(),
+        grep_arg.as_deref(),
+    ]
+    .iter()
+    .filter_map(|v| v.map(|s| s.to_string()))
+    .collect();
+    let stat_branch_arg = branch_arg.clone();
+
     let mut args = vec![
         "log".to_string(),
         "--graph".to_string(),
@@ -130,7 +173,30 @@ pub fn get_history(
     }
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     let out = git_service::git_text(&repo_path, &refs)?;
-    Ok(parse_history_output(&out))
+    let mut commits = parse_history_output(&out);
+
+    // Fetch insertion/deletion stats via a separate shortstat pass
+    let mut stat_args = vec!["log".to_string(), "--format=%H".to_string(), "--shortstat".to_string()];
+    for f in stat_filter_args {
+        stat_args.push(f);
+    }
+    if let Some(b) = stat_branch_arg {
+        stat_args.push(b);
+    } else {
+        stat_args.push("--all".to_string());
+    }
+    let stat_refs: Vec<&str> = stat_args.iter().map(String::as_str).collect();
+    if let Ok(stat_out) = git_service::git_text(&repo_path, &stat_refs) {
+        let stats = parse_stat_output(&stat_out);
+        for commit in commits.iter_mut() {
+            if let Some(&(ins, del)) = stats.get(&commit.hash) {
+                commit.insertions = ins;
+                commit.deletions = del;
+            }
+        }
+    }
+
+    Ok(commits)
 }
 #[tauri::command]
 pub fn get_commit_files(repo_path: String, commit: String) -> Result<Vec<CommitFile>, GitError> {

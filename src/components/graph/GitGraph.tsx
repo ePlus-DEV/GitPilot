@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { ChevronDown, GitCommitHorizontal, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, EyeOff, GitCommitHorizontal, Pencil, Search, SlidersHorizontal, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
@@ -8,8 +8,6 @@ import type { CommitInfo, HistoryFilters } from '../../types/git';
 
 const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
 const ROW_H = 34;
-// git log --graph uses 2 chars per lane: '* ' '| ' '/ ' '\ '
-// LANE_W = pixel distance between adjacent lane centres
 const LANE_W = 16;
 const CIRCLE_R = 4;
 const STROKE_W = 1.5;
@@ -19,9 +17,10 @@ const MAX_LANES = 12;
 const MAX_GRAPH_CHARS = MAX_LANES * 2;
 const GRAPH_W = MAX_LANES * LANE_W + PAD_LEFT * 2;
 const GRAPH_COL_W = GRAPH_W + 4;
-const AUTHOR_W = 130;
-const DATE_W = 70;
-const HASH_W = 68;
+const AUTHOR_W = 120;
+const DATE_W = 72;
+const HASH_W = 64;
+const CHANGES_W = 90;
 const LOAD_MORE_H = 58;
 
 type GraphSegment = {
@@ -58,6 +57,22 @@ function buildRows(commits: CommitInfo[]): RowData[] {
   });
 }
 
+function relativeDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return dateStr;
+  const diffMs = Date.now() - d.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+  return `${Math.floor(diffDays / 365)}y ago`;
+}
+
+const isMergeCommit = (c: CommitInfo) => c.parents.length > 1 || /^merge /i.test(c.message);
+
 const normalized = (value: string) => value.toLowerCase().trim();
 
 function matchesCommit(commit: CommitInfo, query: string) {
@@ -79,12 +94,8 @@ function refClassName(ref: string, selected: boolean) {
   return 'bg-teal-500/15 text-teal-200';
 }
 
-// lane centre x = PAD_LEFT + laneIndex * LANE_W
-// git graph char col c → laneIndex = floor(c / 2)
 const laneX = (charCol: number) => PAD_LEFT + Math.floor(Math.max(0, charCol) / 2) * LANE_W;
 
-// Straight-curve-straight path: lines stay parallel most of the row,
-// only curve briefly near the midpoint — matches GitKraken style.
 function transPath(x1: number, x2: number, h: number): string {
   if (x1 === x2) return `M ${x1} 0 L ${x1} ${h}`;
   const bend = h * 0.38;
@@ -106,7 +117,6 @@ function GraphSvg({ row, height }: { row: RowData; height: number }) {
           );
         }
         if (seg.kind === 'backslash') {
-          // '\' at col c: from lane floor((c-1)/2) top → lane floor((c+1)/2) bottom
           const xa = laneX(seg.col - 1);
           const xb = laneX(seg.col + 1);
           return (
@@ -115,7 +125,6 @@ function GraphSvg({ row, height }: { row: RowData; height: number }) {
           );
         }
         if (seg.kind === 'slash') {
-          // '/' at col c: from lane floor((c+1)/2) top → lane floor((c-1)/2) bottom
           const xa = laneX(seg.col + 1);
           const xb = laneX(seg.col - 1);
           return (
@@ -123,7 +132,6 @@ function GraphSvg({ row, height }: { row: RowData; height: number }) {
               stroke={seg.color} strokeWidth={STROKE_W} fill="none" strokeLinecap="square" />
           );
         }
-        // horizontal
         const x = laneX(seg.col);
         return (
           <line key={i} x1={x} y1={cy} x2={laneX(seg.col + 2)} y2={cy}
@@ -131,22 +139,18 @@ function GraphSvg({ row, height }: { row: RowData; height: number }) {
         );
       })}
 
-      {/* node outgoing (down) */}
       {row.commit.parents.length > 0 && (
         <line x1={cx} y1={cy} x2={cx} y2={height}
           stroke={row.color} strokeWidth={STROKE_W} strokeLinecap="square" />
       )}
-      {/* node incoming (up) */}
       {row.commit.graph.includes('|') && (
         <line x1={cx} y1={0} x2={cx} y2={cy}
           stroke={row.color} strokeWidth={STROKE_W} strokeLinecap="square" />
       )}
 
-      {/* node dot — drawn last so it covers lines */}
       <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
       <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
       <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={row.color} opacity={0.5} />
-      {/* HEAD ring */}
       {row.commit.head && (
         <circle cx={cx} cy={cy} r={CIRCLE_R + 2} fill="none" stroke={row.color} strokeWidth={1.5} opacity={0.7} />
       )}
@@ -154,19 +158,47 @@ function GraphSvg({ row, height }: { row: RowData; height: number }) {
   );
 }
 
+function ChangesBar({ ins, del, maxTotal }: { ins: number; del: number; maxTotal: number }) {
+  const total = ins + del;
+  if (total === 0 || maxTotal === 0) return null;
+  const BAR_W = 36;
+  const scale = Math.min(1, total / maxTotal);
+  const insW = total > 0 ? Math.round((ins / total) * BAR_W * scale) : 0;
+  const delW = Math.round(BAR_W * scale) - insW;
+  return (
+    <div className="flex items-center gap-1 px-2">
+      <div className="flex overflow-hidden rounded-[2px]" style={{ width: BAR_W, height: 6 }}>
+        {insW > 0 && <div className="bg-emerald-500" style={{ width: insW }} />}
+        {delW > 0 && <div className="bg-red-500" style={{ width: delW }} />}
+        {insW + delW < BAR_W && <div className="bg-[#21262d]" style={{ width: BAR_W - insW - delW }} />}
+      </div>
+      <div className="flex flex-col leading-none">
+        {ins > 0 && <span className="text-[8px] font-mono text-emerald-500">+{ins}</span>}
+        {del > 0 && <span className="text-[8px] font-mono text-red-500">-{del}</span>}
+      </div>
+    </div>
+  );
+}
+
 const GraphRow = memo(function GraphRow({
   row,
   selected,
+  dimmed,
+  maxTotal,
   onClick,
   onContextMenu,
 }: {
   row: RowData;
   selected: boolean;
+  dimmed: boolean;
+  maxTotal: number;
   onClick: () => void;
   onContextMenu: (event: ReactMouseEvent) => void;
 }) {
   const refs = row.commit.refs.slice(0, 4);
   const hasExtraRefs = row.commit.refs.length > refs.length;
+  const ins = row.commit.insertions ?? 0;
+  const del = row.commit.deletions ?? 0;
 
   return (
     <button
@@ -175,7 +207,7 @@ const GraphRow = memo(function GraphRow({
       onMouseDown={e => e.preventDefault()}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={`flex w-full select-none items-center border-t border-pilot-line/60 text-left transition-colors hover:bg-[#21262d]/60 ${selected ? 'bg-teal-900/70 text-white hover:bg-teal-900/70' : 'text-slate-300'}`}
+      className={`flex w-full select-none items-center border-t border-pilot-line/60 text-left transition-colors hover:bg-[#21262d]/60 ${selected ? 'bg-teal-900/70 text-white hover:bg-teal-900/70' : 'text-slate-300'} ${dimmed ? 'opacity-35' : ''}`}
       style={{ height: ROW_H }}
     >
       {/* Graph column */}
@@ -208,6 +240,11 @@ const GraphRow = memo(function GraphRow({
         </div>
       </div>
 
+      {/* Changes column */}
+      <div className="shrink-0 overflow-hidden" style={{ width: CHANGES_W }}>
+        <ChangesBar ins={ins} del={del} maxTotal={maxTotal} />
+      </div>
+
       {/* Author column */}
       <div
         className={`shrink-0 overflow-hidden px-2 text-[11px] ${selected ? 'text-white' : 'text-slate-400'}`}
@@ -228,7 +265,7 @@ const GraphRow = memo(function GraphRow({
         className={`shrink-0 px-2 text-[10px] ${selected ? 'text-slate-200' : 'text-slate-500'}`}
         style={{ width: DATE_W }}
       >
-        {row.commit.date}
+        {relativeDate(row.commit.date)}
       </div>
 
       {/* Hash column */}
@@ -258,6 +295,7 @@ export function GitGraph() {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<HistoryFilters>(historyFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [dimMerges, setDimMerges] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: CommitInfo }>();
@@ -280,6 +318,11 @@ export function GitGraph() {
   const refs = useMemo(() => Array.from(new Set(history.flatMap(c => c.refs.map(cleanRef)))).sort(), [history]);
   const visibleRows = useMemo(() => rows.filter(row => matchesCommit(row.commit, search)), [rows, search]);
   const hasFilter = Boolean(search || filters.branch || filters.author || filters.since || filters.until || filters.keyword || filters.filePath);
+
+  const maxTotal = useMemo(() =>
+    Math.max(1, ...history.map(c => (c.insertions ?? 0) + (c.deletions ?? 0))),
+    [history]
+  );
 
   // Virtual scroll
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
@@ -460,7 +503,7 @@ export function GitGraph() {
               <ChevronDown size={10} className="pointer-events-none absolute right-1.5 top-2 text-slate-500" />
             </div>
 
-            {/* Author filter (hidden on narrow) */}
+            {/* Author filter */}
             <div className="relative hidden xl:block">
               <select
                 className="input h-7 cursor-pointer appearance-none pr-6 text-[11px]"
@@ -483,6 +526,16 @@ export function GitGraph() {
                 placeholder="Search commits, SHA, author…"
               />
             </label>
+
+            {/* Dim merges toggle */}
+            <button
+              className={`icon-btn h-7 gap-1 text-[10px] ${dimMerges ? 'accent' : ''}`}
+              onClick={() => setDimMerges(v => !v)}
+              title={dimMerges ? 'Show merge commits' : 'Dim merge commits'}
+            >
+              <EyeOff size={12} />
+              <span className="hidden lg:inline">Merges</span>
+            </button>
 
             <button
               className={`icon-btn h-7 ${filtersOpen ? 'accent' : ''}`}
@@ -514,6 +567,7 @@ export function GitGraph() {
       <div className="flex shrink-0 select-none border-b border-pilot-line bg-pilot-bg text-[9px] font-bold uppercase tracking-wider text-slate-600">
         <div className="shrink-0" style={{ width: GRAPH_COL_W }} />
         <div className="min-w-0 flex-1 px-2 py-1.5">Commit Message</div>
+        <div className="shrink-0 px-2 py-1.5" style={{ width: CHANGES_W }}>Changes</div>
         <div className="shrink-0 px-2 py-1.5" style={{ width: AUTHOR_W }}>Author</div>
         <div className="shrink-0 px-2 py-1.5" style={{ width: DATE_W }}>Date</div>
         <div className="shrink-0 px-2 py-1.5" style={{ width: HASH_W }}>SHA</div>
@@ -525,25 +579,42 @@ export function GitGraph() {
         className="min-h-0 flex-1 select-none overflow-auto [overflow-anchor:none]"
         onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
       >
-        {/* Working Directory row */}
+        {/* Working Directory row — GitKraken WIP style */}
         {changedCount > 0 && (
           <button
             type="button"
-            className="flex w-full select-none items-center border-b border-pilot-line/60 bg-[#21262d]/30 text-left transition-colors hover:bg-[#21262d]/60"
-            style={{ height: wdRowH }}
+            className="flex w-full select-none items-center border-b border-pilot-line/60 text-left transition-colors hover:bg-[#21262d]/60"
+            style={{ height: wdRowH, background: 'linear-gradient(90deg, #1c2128 0%, #0d1117 100%)' }}
             onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
           >
+            {/* WIP dot — white diamond-ish */}
             <div className="shrink-0 overflow-hidden" style={{ width: GRAPH_COL_W }}>
               <svg width={GRAPH_W} height={wdRowH} className="block overflow-hidden">
-                <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R + 3} fill="#ffffff" opacity={0.12} />
+                <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R + 3} fill="#ffffff" opacity={0.08} />
                 <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R} fill="#e2e8f0" />
+                <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R - 1.5} fill="#0d1117" />
+                <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R - 1.5} fill="#e2e8f0" opacity={0.4} />
               </svg>
             </div>
-            <div className="min-w-0 flex-1 px-1.5 text-xs font-medium text-slate-300">
-              Working Directory
+
+            {/* WIP label */}
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-1.5">
+              <span className="shrink-0 font-mono text-[11px] font-semibold text-slate-400">// WIP</span>
+              <span className="flex shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+                <Pencil size={9} />
+                {changedCount}
+              </span>
+              <span className="truncate text-xs text-slate-500">
+                {changedCount} file{changedCount === 1 ? '' : 's'} modified
+              </span>
             </div>
-            <div className="shrink-0 px-2 text-[11px] text-slate-500" style={{ width: AUTHOR_W }}>
-              {changedCount} file{changedCount === 1 ? '' : 's'} changed
+
+            {/* Changes placeholder */}
+            <div className="shrink-0" style={{ width: CHANGES_W }} />
+
+            {/* Author: no avatar for WIP */}
+            <div className="shrink-0 px-2 text-[11px] text-slate-600" style={{ width: AUTHOR_W }}>
+              working tree
             </div>
             <div className="shrink-0 px-2 text-[10px] text-slate-600" style={{ width: DATE_W }}>now</div>
             <div className="shrink-0 px-2 font-mono text-[10px] text-slate-600" style={{ width: HASH_W }}>HEAD</div>
@@ -555,6 +626,7 @@ export function GitGraph() {
           {renderedRows.map((row, i) => {
             const index = startIndex + i;
             const selected = Boolean(selectedCommit?.hash && selectedCommit.hash === commitRevision(row.commit));
+            const dimmed = dimMerges && !selected && isMergeCommit(row.commit);
             return (
               <div
                 key={`${row.commit.hash || row.commit.shortHash}-${index}`}
@@ -564,6 +636,8 @@ export function GitGraph() {
                 <GraphRow
                   row={row}
                   selected={selected}
+                  dimmed={dimmed}
+                  maxTotal={maxTotal}
                   onClick={() => {
                     void selectCommit(row.commit);
                     useGitStore.setState({ rightPanelTab: 'review' });

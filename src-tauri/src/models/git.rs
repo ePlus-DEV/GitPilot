@@ -100,6 +100,8 @@ pub struct CommitInfo {
     pub refs: Vec<String>,
     pub head: bool,
     pub graph: String,
+    pub insertions: u32,
+    pub deletions: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
