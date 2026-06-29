@@ -74,13 +74,36 @@ function GraphLayer({
   rows,
   startIndex,
   laneLabels,
+  activeLane,
 }: {
   rows: RowData[];
   startIndex: number;
   laneLabels: Map<number, string>;
+  activeLane: number;
 }) {
   const [nodeGhost, setNodeGhost] = useState<{ x: number; y: number; color: string; label: string } | null>(null);
+  const [hoveredLane, setHoveredLane] = useState<number | null>(null);
   const svgH = rows.length * ROW_H;
+
+  // Opacity helpers — activeLane < 0 means "no focus, show everything equally"
+  const lineO = (col: number) => {
+    if (activeLane < 0) return 1;
+    if (col === activeLane) return 1;
+    if (hoveredLane === col) return 0.72;
+    return 0.18;
+  };
+  const edgeO = (from: number, to: number) => {
+    if (activeLane < 0) return 1;
+    if (from === activeLane || to === activeLane) return 0.78;
+    if (hoveredLane === from || hoveredLane === to) return 0.65;
+    return 0.16;
+  };
+  const nodeO = (lane: number) => {
+    if (activeLane < 0) return 1;
+    if (lane === activeLane) return 1;
+    if (hoveredLane === lane) return 0.82;
+    return 0.3;
+  };
 
   return (
     <>
@@ -107,9 +130,9 @@ function GraphLayer({
           const cx = laneX(g.lane);
           const nodeColor = LANE_COLORS[g.colorIndex % LANE_COLORS.length];
           const edgeTargetCols = new Set(g.edges.map(([, toCol]) => toCol));
-          // Ghost label only for intermediate commits — skip if row already has a real branch badge
           const hasBadge = g.refs.some(r => r.refType === 'local' || r.refType === 'remote');
           const ghostLabel = hasBadge ? undefined : laneLabels.get(g.lane);
+          const nO = nodeO(g.lane);
 
           return (
             <g key={row.commit.hash || `r${i}`}>
@@ -118,7 +141,9 @@ function GraphLayer({
                 <line key={`t${i}-${j}`}
                   x1={laneX(col)} y1={rowTop} x2={laneX(col)} y2={cy}
                   stroke={LANE_COLORS[ci % LANE_COLORS.length]}
-                  strokeWidth={STROKE_W} strokeLinecap="round" />
+                  strokeWidth={col === activeLane ? STROKE_W + 0.3 : STROKE_W}
+                  strokeLinecap="round"
+                  opacity={lineO(col)} />
               ))}
               {/* Bottom-half lane continuations (skip bezier target cols — bezier covers them) */}
               {g.bottomLines
@@ -127,40 +152,46 @@ function GraphLayer({
                   <line key={`b${i}-${j}`}
                     x1={laneX(col)} y1={cy} x2={laneX(col)} y2={rowBottom}
                     stroke={LANE_COLORS[ci % LANE_COLORS.length]}
-                    strokeWidth={STROKE_W} strokeLinecap="round" />
+                    strokeWidth={col === activeLane ? STROKE_W + 0.3 : STROKE_W}
+                    strokeLinecap="round"
+                    opacity={lineO(col)} />
                 ))}
               {/* Bezier merge/fork edges */}
               {g.edges.map(([fromCol, toCol, ci], j) => (
                 <path key={`e${i}-${j}`}
                   d={edgePath(laneX(fromCol), laneX(toCol), cy, rowBottom)}
                   stroke={LANE_COLORS[ci % LANE_COLORS.length]}
-                  strokeWidth={STROKE_W} fill="none" strokeLinecap="round" />
+                  strokeWidth={STROKE_W} fill="none" strokeLinecap="round"
+                  opacity={edgeO(fromCol, toCol)} />
               ))}
-              {/* Commit node — glow ring → outer fill → dark ring → inner fill */}
-              <circle cx={cx} cy={cy} r={CIRCLE_R + 3.5} fill={nodeColor} opacity={0.13} />
-              <circle cx={cx} cy={cy} r={CIRCLE_R} fill={nodeColor} />
-              <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
-              <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={nodeColor} opacity={0.5} />
-              {g.isHead && (
-                <circle cx={cx} cy={cy} r={CIRCLE_R + 2.5}
-                  fill="none" stroke={nodeColor} strokeWidth={1.5} opacity={0.9} />
-              )}
-              {g.isMerge && !g.isHead && (
-                <circle cx={cx} cy={cy} r={CIRCLE_R + 2}
-                  fill="none" stroke={nodeColor} strokeWidth={1} opacity={0.55} />
-              )}
-              {/* Ghost-label hover hit-area — pointer-events re-enabled on this element only */}
-              {ghostLabel && (
-                <circle cx={cx} cy={cy} r={CIRCLE_R + 5}
-                  fill="transparent"
-                  style={{ pointerEvents: 'all', cursor: 'default' }}
-                  onMouseEnter={(e) => {
+              {/* Commit node — glow → outer → dark ring → inner */}
+              <g opacity={nO}>
+                <circle cx={cx} cy={cy} r={CIRCLE_R + 3.5} fill={nodeColor} opacity={0.13} />
+                <circle cx={cx} cy={cy} r={CIRCLE_R} fill={nodeColor} />
+                <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
+                <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={nodeColor} opacity={0.5} />
+                {g.isHead && (
+                  <circle cx={cx} cy={cy} r={CIRCLE_R + 2.5}
+                    fill="none" stroke={nodeColor} strokeWidth={1.5} opacity={0.9} />
+                )}
+                {g.isMerge && !g.isHead && (
+                  <circle cx={cx} cy={cy} r={CIRCLE_R + 2}
+                    fill="none" stroke={nodeColor} strokeWidth={1} opacity={0.55} />
+                )}
+              </g>
+              {/* Hover hit-area — always present so inactive lanes can be hovered */}
+              <circle cx={cx} cy={cy} r={CIRCLE_R + 5}
+                fill="transparent"
+                style={{ pointerEvents: 'all', cursor: 'default' }}
+                onMouseEnter={(e) => {
+                  setHoveredLane(g.lane);
+                  if (ghostLabel) {
                     const rect = (e.currentTarget as Element).getBoundingClientRect();
                     setNodeGhost({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color: nodeColor, label: ghostLabel });
-                  }}
-                  onMouseLeave={() => setNodeGhost(null)}
-                />
-              )}
+                  }
+                }}
+                onMouseLeave={() => { setHoveredLane(null); setNodeGhost(null); }}
+              />
             </g>
           );
         })}
@@ -345,6 +376,7 @@ const GraphRow = memo(function GraphRow({
   selected,
   dimmed,
   maxTotal,
+  isActiveLane,
   onClick,
   onContextMenu,
 }: {
@@ -352,6 +384,7 @@ const GraphRow = memo(function GraphRow({
   selected: boolean;
   dimmed: boolean;
   maxTotal: number;
+  isActiveLane: boolean;
   onClick: () => void;
   onContextMenu: (event: ReactMouseEvent) => void;
 }) {
@@ -361,8 +394,10 @@ const GraphRow = memo(function GraphRow({
   const lci = row.graph?.colorIndex ?? 0;
   const bandColor = LANE_COLORS[lci % LANE_COLORS.length];
   const lcx = BRANCH_COL_W + laneX(lane);
-  const graphRight = BRANCH_COL_W + GRAPH_COL_W; // Hard stop — band must not cross into commit message column
-  const bandGradient = `linear-gradient(90deg, transparent ${Math.max(0, lcx - 20)}px, ${bandColor}0e ${lcx}px, ${bandColor}12 ${lcx + 12}px, ${bandColor}09 ${Math.min(lcx + 55, graphRight - 20)}px, transparent ${graphRight}px)`;
+  const graphRight = BRANCH_COL_W + GRAPH_COL_W;
+  const bandGradient = isActiveLane
+    ? `linear-gradient(90deg, transparent ${Math.max(0, lcx - 20)}px, ${bandColor}0e ${lcx}px, ${bandColor}12 ${lcx + 12}px, ${bandColor}09 ${Math.min(lcx + 55, graphRight - 20)}px, transparent ${graphRight}px)`
+    : undefined;
 
   return (
     <button
@@ -491,6 +526,15 @@ export function GitGraph() {
     }
     return map;
   }, [graphData]);
+
+  // Active lane: lane of current branch (for focus/dim effect)
+  const activeLane = useMemo(() => {
+    for (const [lane, name] of laneLabels.entries()) {
+      if (name === currentBranch) return lane;
+    }
+    const headRow = graphData.find(r => r.isHead);
+    return headRow?.lane ?? -1;
+  }, [laneLabels, currentBranch, graphData]);
 
   // Virtual scroll
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
@@ -832,7 +876,7 @@ export function GitGraph() {
         {/* Virtual scrolled commit rows */}
         <div className="relative" style={{ height: totalListHeight }}>
           {/* Shared graph SVG layer — renders all lane lines/nodes without per-row clipping */}
-          <GraphLayer rows={renderedRows} startIndex={startIndex} laneLabels={laneLabels} />
+          <GraphLayer rows={renderedRows} startIndex={startIndex} laneLabels={laneLabels} activeLane={activeLane} />
 
           {renderedRows.map((row, i) => {
             const index = startIndex + i;
@@ -849,6 +893,7 @@ export function GitGraph() {
                   selected={selected}
                   dimmed={dimmed}
                   maxTotal={maxTotal}
+                  isActiveLane={activeLane < 0 || (row.graph?.lane ?? -1) === activeLane}
                   onClick={() => {
                     void selectCommit(row.commit);
                     useGitStore.setState({ rightPanelTab: 'review' });
