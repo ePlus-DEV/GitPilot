@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
-    "test": "npm run typecheck && npm run test:rust"
+    "test": "npm run test:welcome && npm run typecheck && npm run test:rust",
+    "test:welcome": "node --test scripts/welcomeSetupUtils.test.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
