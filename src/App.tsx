@@ -10,6 +10,7 @@ import { ConsolePanel } from './components/console/ConsolePanel';
 import { CommitDetails } from './components/history/CommitDetails';
 import { MergeResolver } from './components/merge/MergeResolver';
 import { GitGraph } from './components/graph/GitGraph';
+import { MergeConflictPanel } from './components/merge-conflict/MergeConflictPanel';
 import { AiPanel } from './components/ai/AiPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { gitService } from './services/gitService';
@@ -18,6 +19,8 @@ export function App() {
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const conflict = useGitStore(s => s.conflict);
   const diff = useGitStore(s => s.diff);
+  const status = useGitStore(s => s.status);
+  const showMergePanel = status.conflicted.length > 0 || status.mergeState.isMerging || status.mergeState.isRebasing;
   const aiText = useGitStore(s => s.aiText);
   const settingsOpen = useGitStore(s => s.settingsOpen);
   const rightPanelTab = useGitStore(s => s.rightPanelTab);
@@ -71,7 +74,7 @@ export function App() {
         />
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-pilot-bg">
-          <GitGraph />
+          {showMergePanel ? <MergeConflictPanel /> : <GitGraph />}
         </main>
 
         <div

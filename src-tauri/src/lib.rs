@@ -52,6 +52,7 @@ pub fn run() {
             commands::merge::abort_merge,
             commands::merge::continue_merge,
             commands::merge::parse_conflict_file,
+            commands::merge::get_conflict_file,
             commands::merge::save_resolved_file,
             commands::rebase::start_rebase,
             commands::rebase::continue_rebase,
