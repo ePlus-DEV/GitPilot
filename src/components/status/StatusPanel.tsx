@@ -3,6 +3,7 @@ import { ChevronRight, FilePlus2, Minus, Plus, RotateCcw, Trash2 } from 'lucide-
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import type { GitFileStatus } from '../../types/git';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 
 export function StatusPanel() {
   const status = useGitStore(s => s.status);
@@ -11,8 +12,38 @@ export function StatusPanel() {
   const loadConflict = useGitStore(s => s.loadConflict);
   const [stagedOpen, setStagedOpen] = useState(true);
   const [unstagedOpen, setUnstagedOpen] = useState(true);
+  const [menu, setMenu] = useState<{ x: number; y: number; file: GitFileStatus; cached: boolean; conflicted?: boolean }>();
 
   const act = (label: string, fn: () => Promise<unknown>) => repo && run(label, fn, 'status');
+  const copyPath = (path: string) => void navigator.clipboard.writeText(path).then(() => useGitStore.getState().log(`Copied path: ${path}`));
+  const fileMenuItems = ({ file, cached, conflicted }: NonNullable<typeof menu>): ContextMenuItem[] => [
+    {
+      label: cached ? 'Unstage file' : conflicted ? 'Open resolver' : 'Stage file',
+      action: () => cached ? act('unstage', () => gitService.unstageFile(repo!, file.path)) : conflicted ? void loadConflict(file.path) : act('stage', () => gitService.stageFile(repo!, file.path)),
+    },
+    {
+      label: 'Show diff',
+      action: () => void useGitStore.getState().setSelectedFile(file, cached),
+    },
+    { label: 'file-separator', separator: true, action: () => undefined },
+    {
+      label: 'Discard changes',
+      danger: true,
+      disabled: cached || conflicted || file.worktreeStatus === '?',
+      action: () => repo && confirm(`Discard ${file.path}?`) && void run('discard', () => gitService.discardFile(repo, file.path), 'status'),
+    },
+    {
+      label: 'Delete untracked file',
+      danger: true,
+      disabled: file.worktreeStatus !== '?' && file.indexStatus !== '?',
+      action: () => repo && confirm(`Delete ${file.path}?`) && void run('delete', () => gitService.deleteUntrackedFile(repo, file.path), 'status'),
+    },
+    { label: 'copy-separator', separator: true, action: () => undefined },
+    {
+      label: 'Copy relative path',
+      action: () => copyPath(file.path),
+    },
+  ];
 
   const staged = status.staged;
   const unstaged = [...status.unstaged, ...status.untracked, ...status.conflicted];
@@ -64,6 +95,7 @@ export function StatusPanel() {
                 action="Unstage"
                 actionIcon={<Minus size={11} />}
                 onAction={() => act('unstage', () => gitService.unstageFile(repo!, f.path))}
+                onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY, file: f, cached: true }); }}
                 cached
               />
             ))}
@@ -109,6 +141,7 @@ export function StatusPanel() {
                 actionIcon={<Plus size={11} />}
                 onAction={() => act('stage', () => gitService.stageFile(repo!, f.path))}
                 onDiscard={() => repo && confirm(`Discard ${f.path}?`) && run('discard', () => gitService.discardFile(repo, f.path), 'status')}
+                onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY, file: f, cached: false }); }}
               />
             ))}
             {status.untracked.map(f => (
@@ -119,6 +152,7 @@ export function StatusPanel() {
                 actionIcon={<FilePlus2 size={11} />}
                 onAction={() => act('stage', () => gitService.stageFile(repo!, f.path))}
                 onDelete={() => repo && confirm(`Delete ${f.path}?`) && run('delete', () => gitService.deleteUntrackedFile(repo, f.path), 'status')}
+                onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY, file: f, cached: false }); }}
               />
             ))}
             {status.conflicted.map(f => (
@@ -128,6 +162,7 @@ export function StatusPanel() {
                 action="Resolve"
                 actionIcon={<FilePlus2 size={11} />}
                 onAction={() => void loadConflict(f.path)}
+                onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY, file: f, cached: false, conflicted: true }); }}
                 conflicted
               />
             ))}
@@ -137,6 +172,15 @@ export function StatusPanel() {
           </div>
         )}
       </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          title={menu.file.path}
+          items={fileMenuItems(menu)}
+          onClose={() => setMenu(undefined)}
+        />
+      )}
     </section>
   );
 }
@@ -148,6 +192,7 @@ function FileRow({
   onAction,
   onDiscard,
   onDelete,
+  onContextMenu,
   cached = false,
   conflicted = false,
 }: {
@@ -157,13 +202,14 @@ function FileRow({
   onAction: () => void;
   onDiscard?: () => void;
   onDelete?: () => void;
+  onContextMenu?: React.MouseEventHandler;
   cached?: boolean;
   conflicted?: boolean;
 }) {
   const select = useGitStore(st => st.setSelectedFile);
 
   return (
-    <div className="group flex h-7 items-center gap-1.5 px-3 hover:bg-[#21262d]/60">
+    <div className="group flex h-7 items-center gap-1.5 px-3 hover:bg-[#21262d]/60" onContextMenu={onContextMenu}>
       <span className={`w-4 shrink-0 text-center font-mono text-[10px] ${conflicted ? 'text-red-400' : 'text-pilot-blue'}`}>
         {file.displayStatus || (file.indexStatus + file.worktreeStatus).trim() || '?'}
       </span>

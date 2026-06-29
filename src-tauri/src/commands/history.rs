@@ -290,6 +290,23 @@ pub fn create_patch_from_commit(repo_path: String, commit: String) -> Result<Str
     }
     git_service::git_text(&repo_path, &["format-patch", "-1", "--stdout", commit])
 }
+
+#[tauri::command]
+pub fn restore_file_from_commit(
+    repo_path: String,
+    commit: String,
+    file_path: String,
+) -> Result<crate::models::git::GitCommandOutput, GitError> {
+    let commit = commit.trim();
+    let file_path = file_path.trim();
+    if commit.is_empty() {
+        return Err(GitError::new("invalid_commit", "Commit hash is empty.", ""));
+    }
+    if file_path.is_empty() {
+        return Err(GitError::new("invalid_path", "File path is empty.", ""));
+    }
+    git_service::git_checked(&repo_path, &["restore", "--source", commit, "--", file_path])
+}
 #[tauri::command]
 pub fn cherry_pick_commit(
     repo_path: String,
