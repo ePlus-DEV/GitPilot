@@ -2,6 +2,18 @@ use crate::{
     models::git::{BranchInfo, GitCommandOutput, GitError},
     services::git_service,
 };
+fn parse_track(track: &str) -> (i32, i32) {
+    let ahead: i32 = track.split("ahead ").nth(1)
+        .and_then(|s| s.split([',', ']']).next())
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0);
+    let behind: i32 = track.split("behind ").nth(1)
+        .and_then(|s| s.split(']').next())
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0);
+    (ahead, behind)
+}
+
 #[tauri::command]
 pub fn list_branches(repo_path: String) -> Result<Vec<BranchInfo>, GitError> {
     let out = git_service::git_text(
@@ -9,24 +21,27 @@ pub fn list_branches(repo_path: String) -> Result<Vec<BranchInfo>, GitError> {
         &[
             "branch",
             "--all",
-            "--format=%(HEAD)|%(refname:short)|%(upstream:short)",
+            "--format=%(HEAD)|%(refname:short)|%(upstream:short)|%(upstream:track)|%(refname)",
         ],
     )?;
     Ok(out
         .lines()
         .filter_map(|l| {
-            let p: Vec<_> = l.split('|').collect();
+            let p: Vec<_> = l.splitn(5, '|').collect();
             if p.len() < 2 {
                 return None;
             }
             let name = p[1].trim().to_string();
+            let full_ref = p.get(4).map(|s| s.trim()).unwrap_or("");
+            let track = p.get(3).map(|s| s.trim()).unwrap_or("");
+            let (ahead, behind) = parse_track(track);
             Some(BranchInfo {
                 name: name.clone(),
                 current: p[0].trim() == "*",
-                remote: name.starts_with("remotes/"),
-                upstream: p.get(2).filter(|s| !s.is_empty()).map(|s| s.to_string()),
-                ahead: 0,
-                behind: 0,
+                remote: full_ref.starts_with("refs/remotes/"),
+                upstream: p.get(2).filter(|s| !s.trim().is_empty()).map(|s| s.trim().to_string()),
+                ahead,
+                behind,
             })
         })
         .collect())

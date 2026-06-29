@@ -32,6 +32,7 @@ pub fn run() {
             commands::branch::compare_branch,
             commands::remote::list_remotes,
             commands::remote::fetch,
+            commands::remote::fetch_all,
             commands::remote::pull,
             commands::remote::push,
             commands::remote::push_new_branch,

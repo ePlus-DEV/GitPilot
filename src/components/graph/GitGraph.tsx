@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { ChevronDown, EyeOff, GitCommitHorizontal, Pencil, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, EyeOff, GitCommitHorizontal, Pencil, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
@@ -271,8 +271,10 @@ export function GitGraph() {
   const status = useGitStore(s => s.status);
   const currentBranch = useGitStore(s => s.status.currentBranch || s.repo?.currentBranch || 'current branch');
   const loadHistory = useGitStore(s => s.loadHistory);
+  const fetchAll = useGitStore(s => s.fetchAll);
   const run = useGitStore(s => s.run);
   const log = useGitStore(s => s.log);
+  const [fetching, setFetching] = useState(false);
 
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<HistoryFilters>(historyFilters);
@@ -319,6 +321,11 @@ export function GitGraph() {
   const wdRowH = changedCount > 0 ? ROW_H : 0;
   const totalListHeight = visibleRows.length * ROW_H + LOAD_MORE_H;
 
+  const handleFetch = async () => {
+    setFetching(true);
+    try { await fetchAll(); } finally { setFetching(false); }
+  };
+
   const clear = () => { setSearch(''); setFilters({}); };
   const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
   const commitRevision = (commit: CommitInfo) => commit.hash.trim() || commit.shortHash.trim();
@@ -336,9 +343,30 @@ export function GitGraph() {
   const commitMenuItems = (commit: CommitInfo): ContextMenuItem[] => {
     const revision = commitRevision(commit);
     const short = commit.shortHash || revision.slice(0, 8);
+
+    const cleaned = commit.refs.map(r => cleanRef(r)).filter(r => r !== 'HEAD' && !r.startsWith('tag:'));
+    // Local branches: no slash
+    const localBranches = cleaned.filter(r => !r.includes('/'));
+    // Remote branches: strip remote-name prefix → local name to checkout/track
+    const remoteBranches = cleaned
+      .filter(r => r.includes('/') && !r.endsWith('/HEAD'))
+      .map(r => ({ remote: r, local: r.slice(r.indexOf('/') + 1) }))
+      .filter(({ local }) => !localBranches.includes(local)); // skip if local already listed
+
+    const checkoutBranch = (name: string) =>
+      repo && void run(`checkout ${name}`, () => gitService.checkoutBranch(repo, name));
+
     return [
+      ...localBranches.map(branch => ({
+        label: `Checkout  ${branch}`,
+        action: () => checkoutBranch(branch),
+      })),
+      ...remoteBranches.map(({ remote, local }) => ({
+        label: `Checkout  ${local}  ← ${remote}`,
+        action: () => checkoutBranch(local),
+      })),
       {
-        label: 'Checkout this commit',
+        label: localBranches.length + remoteBranches.length > 0 ? 'Checkout (detached HEAD)' : 'Checkout this commit',
         action: () => {
           if (confirm(`Checkout ${short} in detached HEAD?`))
             runCommitAction('checkout commit', commit, rev => gitService.checkoutCommit(repo!, rev));
@@ -514,6 +542,17 @@ export function GitGraph() {
                 placeholder="Search commits, SHA, author…"
               />
             </label>
+
+            {/* Fetch button */}
+            <button
+              className={`icon-btn h-7 gap-1 text-[10px] ${fetching ? 'opacity-60' : ''}`}
+              onClick={() => void handleFetch()}
+              disabled={fetching || !repo}
+              title="Fetch all remotes"
+            >
+              <RefreshCw size={12} className={fetching ? 'animate-spin' : ''} />
+              <span className="hidden lg:inline">Fetch</span>
+            </button>
 
             {/* Dim merges toggle */}
             <button

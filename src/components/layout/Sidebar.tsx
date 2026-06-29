@@ -196,7 +196,14 @@ export function Sidebar() {
                 event.preventDefault();
                 setBranchMenu({ x: event.clientX, y: event.clientY, branch: b });
               }}
-              meta={b.ahead || b.behind ? `up ${b.ahead} down ${b.behind}` : undefined}
+              extra={
+                (b.ahead > 0 || b.behind > 0) ? (
+                  <span className="flex shrink-0 items-center gap-0.5 font-mono text-[9px]">
+                    {b.ahead > 0 && <span className="text-teal-400">↑{b.ahead}</span>}
+                    {b.behind > 0 && <span className="text-orange-400">↓{b.behind}</span>}
+                  </span>
+                ) : undefined
+              }
             />
           ))}
         </Section>
@@ -311,13 +318,14 @@ function Section({
 }
 
 function SidebarRow({
-  label, title, active, icon, meta, onClick, onContextMenu, onDelete, onAction, actionIcon, actionTitle,
+  label, title, active, icon, meta, extra, onClick, onContextMenu, onDelete, onAction, actionIcon, actionTitle,
 }: {
   label: string;
   title?: string;
   active?: boolean;
   icon?: ReactNode;
   meta?: string;
+  extra?: ReactNode;
   onClick?: () => void;
   onContextMenu?: (event: ReactMouseEvent) => void;
   onDelete?: () => void;
@@ -339,6 +347,7 @@ function SidebarRow({
         {label}
       </button>
       {meta && <span className="shrink-0 text-[10px] text-slate-500">{meta}</span>}
+      {extra}
       <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
         {onAction && (
           <button

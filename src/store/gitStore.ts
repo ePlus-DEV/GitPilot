@@ -64,6 +64,7 @@ type State = {
   loadHistory: (filters?: HistoryFilters, limit?: number) => Promise<void>;
   loadGraphData: (filters?: HistoryFilters, limit?: number) => Promise<void>;
   run: (label: string, fn: () => Promise<GitCommandOutput | GitCommandOutput[] | string | unknown>, refreshMode?: RefreshMode) => Promise<void>;
+  fetchAll: () => Promise<void>;
   setSelectedFile: (f: GitFileStatus, cached: boolean) => Promise<void>;
   selectCommit: (c: CommitInfo) => Promise<void>;
   loadConflict: (path: string) => Promise<void>;
@@ -125,6 +126,8 @@ export const useGitStore = create<State>((set, get) => ({
       await gitService.saveRecentRepository(path);
       set({ repo });
       await get().refresh();
+      // Background fetch — updates remote tracking refs silently after initial load
+      void gitService.fetchAll(path).then(() => get().refresh()).catch(() => {});
     } catch (e) {
       get().log(String((e as Error).message ?? e));
     } finally {
@@ -263,6 +266,17 @@ export const useGitStore = create<State>((set, get) => ({
       get().log(message);
     } finally {
       if (get().selectedCommit?.hash === hash) set({ commitFilesLoading: false });
+    }
+  },
+
+  fetchAll: async () => {
+    const repo = get().repo;
+    if (!repo) return;
+    try {
+      await gitService.fetchAll(repo.path);
+      await get().refresh();
+    } catch (e) {
+      get().log(String((e as Error).message ?? e));
     }
   },
 
