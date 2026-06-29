@@ -14,6 +14,7 @@ import { MergeConflictPanel } from './components/merge-conflict/MergeConflictPan
 import { AiPanel } from './components/ai/AiPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { WelcomeScreen } from './components/welcome/WelcomeScreen';
+import { RepoTabs } from './components/layout/RepoTabs';
 import { gitService } from './services/gitService';
 
 export function App() {
@@ -31,7 +32,9 @@ export function App() {
   const [consoleHeight, setConsoleHeight] = useState(144);
 
   useEffect(() => {
+    let cancelled = false;
     void gitService.getSettings().then(settings => {
+      if (cancelled) return;
       useGitStore.setState({ settings, recent: settings.recentRepositories });
       const state = useGitStore.getState();
       if (!state.repo && settings.recentRepositories[0]) void state.openRepo(settings.recentRepositories[0]);
@@ -45,7 +48,7 @@ export function App() {
         void state.run('push', () => gitService.push(state.repo!.path));
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => { cancelled = true; window.removeEventListener('keydown', onKey); };
   }, []);
 
   const startResize = (move: (event: MouseEvent) => void) => (event: ReactMouseEvent) => {
@@ -65,8 +68,9 @@ export function App() {
   return (
     <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
       {settingsOpen && <SettingsPanel />}
+      <RepoTabs />
+      <TopBar />
       {!repo && <WelcomeScreen />}
-      {repo && <TopBar />}
 
       {repo && <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="min-h-0 shrink-0" style={{ width: sidebarWidth }}>

@@ -4,6 +4,11 @@
 
 html, body, #root { height: 100%; overflow: hidden; }
 
+@keyframes gpWelcomePulse {
+  0%, 100% { opacity: 0.3; }
+  50%       { opacity: 1; }
+}
+
 body {
   @apply bg-pilot-bg text-slate-100 font-sans;
   font-size: 13px;

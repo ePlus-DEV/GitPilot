@@ -1,19 +1,25 @@
+import { useId } from 'react';
+
 export function GitPilotIcon({ size = 28 }: { size?: number }) {
+  const uid = useId().replace(/:/g, '');
+  const bgId = `gpi-bg-${uid}`;
+  const rimId = `gpi-rim-${uid}`;
+
   return (
     <svg viewBox="0 0 160 160" width={size} height={size} xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
       <defs>
-        <radialGradient id="gpi-bg" cx="44%" cy="36%" r="65%">
+        <radialGradient id={bgId} cx="44%" cy="36%" r="65%">
           <stop offset="0%" stopColor="#16223a"/>
           <stop offset="100%" stopColor="#080d16"/>
         </radialGradient>
-        <linearGradient id="gpi-rim" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id={rimId} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%"   stopColor="#38bdf8" stopOpacity="0.8"/>
           <stop offset="50%"  stopColor="#a78bfa" stopOpacity="0.6"/>
           <stop offset="100%" stopColor="#34d399" stopOpacity="0.5"/>
         </linearGradient>
       </defs>
-      <circle cx="80" cy="80" r="72" fill="url(#gpi-bg)"/>
-      <circle cx="80" cy="80" r="72" fill="none" stroke="url(#gpi-rim)" strokeWidth="1.5"/>
+      <circle cx="80" cy="80" r="72" fill={`url(#${bgId})`}/>
+      <circle cx="80" cy="80" r="72" fill="none" stroke={`url(#${rimId})`} strokeWidth="1.5"/>
       <line x1="68" y1="14"  x2="68" y2="50"  stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>
       <line x1="68" y1="62"  x2="68" y2="100" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>
       <line x1="68" y1="113" x2="68" y2="146" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>

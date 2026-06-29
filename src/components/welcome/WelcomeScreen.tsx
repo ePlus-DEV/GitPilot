@@ -68,12 +68,12 @@ export function WelcomeScreen() {
   };
 
   return (
-    <div className="relative flex h-full items-center justify-center overflow-hidden bg-[#0d1117]">
+    <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-[#0d1117]">
       {/* Background: subtle animated git graph decoration */}
       <BackgroundGraph />
 
       {/* Main card */}
-      <div className="relative z-10 flex w-full max-w-[820px] items-stretch gap-0 overflow-hidden rounded-2xl border border-[#21262d] bg-[#0d1117]/90 shadow-2xl shadow-black/60 backdrop-blur-sm">
+      <div className="relative z-10 flex w-full max-w-[820px] items-stretch gap-0 overflow-hidden rounded-2xl border border-[#21262d] bg-[#0d1117] shadow-2xl shadow-black/60">
 
         {/* Left panel — logo + actions */}
         <div className="flex flex-1 flex-col justify-between p-10">
@@ -188,12 +188,6 @@ function BackgroundGraph() {
           }}
         />
       ))}
-      <style>{`
-        @keyframes gpWelcomePulse {
-          0%, 100% { opacity: 0.3; }
-          50%       { opacity: 1; }
-        }
-      `}</style>
     </div>
   );
 }
