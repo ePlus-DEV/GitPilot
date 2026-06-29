@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { ChevronDown, Cloud, EyeOff, GitCommitHorizontal, Monitor, Pencil, RefreshCw, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
@@ -167,10 +168,41 @@ function ChangesBar({ ins, del, maxTotal }: { ins: number; del: number; maxTotal
   );
 }
 
+type BadgeHover = {
+  x: number; y: number; h: number;
+  name: string;
+  local?: boolean; remote?: boolean; isTag?: boolean;
+  bg: string; fg: string; bdr: string;
+};
+
+function ExpandedBadge({ b }: { b: BadgeHover }) {
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[9999] flex items-center gap-1 whitespace-nowrap rounded px-1.5 text-[12px] font-semibold"
+      style={{
+        left: b.x, top: b.y, height: b.h,
+        /* Solid dark bg so commit message doesn't bleed through */
+        background: '#1a2233',
+        color: b.fg,
+        border: b.bdr,
+        alignItems: 'center',
+        boxShadow: '0 2px 16px rgba(0,0,0,0.7)',
+      }}
+    >
+      {b.name}
+      {b.local && <Monitor size={10} className="shrink-0 opacity-80" />}
+      {b.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
+      {b.isTag && <Tag size={10} className="shrink-0 opacity-80" />}
+    </div>,
+    document.body,
+  );
+}
+
 function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
   const laneColor = row.graph
     ? LANE_COLORS[row.graph.colorIndex % LANE_COLORS.length]
     : LANE_COLORS[0];
+  const [hover, setHover] = useState<BadgeHover | null>(null);
 
   const allRefs = row.commit.refs;
   if (allRefs.length === 0) return <div className="shrink-0" style={{ width: BRANCH_COL_W }} />;
@@ -204,43 +236,60 @@ function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
   const badgeText = selected ? '#ffffff' : laneColor;
   const badgeBorder = selected ? `1px solid ${laneColor}cc` : `1px solid ${laneColor}70`;
 
+  const onEnter = (
+    e: React.MouseEvent,
+    name: string,
+    opts: { local?: boolean; remote?: boolean; isTag?: boolean },
+    bg: string, fg: string, bdr: string,
+  ) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setHover({ x: r.left, y: r.top, h: r.height, name, ...opts, bg, fg, bdr });
+  };
+
   return (
-    <div
-      className="flex shrink-0 items-center justify-end gap-0.5 overflow-hidden px-1"
-      style={{ width: BRANCH_COL_W }}
-    >
-      {isHead && (
-        <span className="shrink-0 text-[11px] font-bold leading-none text-yellow-400">✓</span>
-      )}
-      {showGroups.map(g => (
-        <span
-          key={g.name}
-          title={g.name}
-          className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
-          style={{ maxWidth: 138, background: badgeBg, color: badgeText, border: badgeBorder }}
-        >
-          <span className="min-w-0 truncate">{g.name}</span>
-          {g.local && <Monitor size={10} className="shrink-0 opacity-80" />}
-          {g.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
-        </span>
-      ))}
-      {showTags.map(tag => (
-        <span
-          key={tag}
-          title={tag}
-          className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
-          style={{ maxWidth: 138, background: '#a78bfa38', color: '#c4b5fd', border: '1px solid #a78bfa70' }}
-        >
-          <span className="min-w-0 truncate">{tag}</span>
-          <Tag size={10} className="shrink-0 opacity-80" />
-        </span>
-      ))}
-      {extra > 0 && (
-        <span title={allNames} className="shrink-0 cursor-default rounded px-0.5 text-[9px] text-slate-500">
-          +{extra}
-        </span>
-      )}
-    </div>
+    <>
+      <div
+        className="flex shrink-0 items-center justify-end gap-0.5 overflow-hidden px-1"
+        style={{ width: BRANCH_COL_W }}
+        onMouseLeave={() => setHover(null)}
+      >
+        {isHead && (
+          <span className="shrink-0 text-[11px] font-bold leading-none text-yellow-400">✓</span>
+        )}
+        {showGroups.map(g => (
+          <span
+            key={g.name}
+            className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
+            style={{ maxWidth: 138, background: badgeBg, color: badgeText, border: badgeBorder }}
+            onMouseEnter={e => onEnter(e, g.name, { local: g.local, remote: g.remote }, badgeBg, badgeText, badgeBorder)}
+          >
+            <span className="min-w-0 truncate">{g.name}</span>
+            {g.local && <Monitor size={10} className="shrink-0 opacity-80" />}
+            {g.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
+          </span>
+        ))}
+        {showTags.map(tag => (
+          <span
+            key={tag}
+            className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
+            style={{ maxWidth: 138, background: '#a78bfa38', color: '#c4b5fd', border: '1px solid #a78bfa70' }}
+            onMouseEnter={e => onEnter(e, tag, { isTag: true }, '#a78bfa38', '#c4b5fd', '1px solid #a78bfa70')}
+          >
+            <span className="min-w-0 truncate">{tag}</span>
+            <Tag size={10} className="shrink-0 opacity-80" />
+          </span>
+        ))}
+        {extra > 0 && (
+          <span
+            className="shrink-0 cursor-default rounded px-0.5 text-[9px] text-slate-500"
+            onMouseEnter={e => onEnter(e, allNames, {}, '#1e2633', '#94a3b8', '1px solid #334155')}
+          >
+            +{extra}
+          </span>
+        )}
+      </div>
+      {hover && <ExpandedBadge b={hover} />}
+    </>
   );
 }
 
