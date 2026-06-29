@@ -9,12 +9,12 @@ import type { CommitGraphRow, CommitInfo, HistoryFilters } from '../../types/git
 
 const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
 const ROW_H = 34;
-const LANE_W = 14;
+const LANE_W = 12;          // Tighter lanes — more branches visible, closer to GitKraken spacing
 const CIRCLE_R = 4;
-const STROKE_W = 1.5;
+const STROKE_W = 1.8;       // Slightly thicker than before for crisper lines
 const PAD_LEFT = 4;
 const OVERSCAN = 8;
-const MAX_LANES = 12;
+const MAX_LANES = 14;       // Support more parallel lanes before truncating
 const MAX_GRAPH_CHARS = MAX_LANES * 2;
 const GRAPH_W = MAX_LANES * LANE_W + PAD_LEFT * 2;
 const GRAPH_COL_W = GRAPH_W + 4;
@@ -136,17 +136,18 @@ function GraphLayer({
                   stroke={LANE_COLORS[ci % LANE_COLORS.length]}
                   strokeWidth={STROKE_W} fill="none" strokeLinecap="round" />
               ))}
-              {/* Commit node */}
+              {/* Commit node — glow ring → outer fill → dark ring → inner fill */}
+              <circle cx={cx} cy={cy} r={CIRCLE_R + 3.5} fill={nodeColor} opacity={0.13} />
               <circle cx={cx} cy={cy} r={CIRCLE_R} fill={nodeColor} />
               <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
               <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={nodeColor} opacity={0.5} />
               {g.isHead && (
-                <circle cx={cx} cy={cy} r={CIRCLE_R + 2}
-                  fill="none" stroke={nodeColor} strokeWidth={1.5} opacity={0.8} />
+                <circle cx={cx} cy={cy} r={CIRCLE_R + 2.5}
+                  fill="none" stroke={nodeColor} strokeWidth={1.5} opacity={0.9} />
               )}
               {g.isMerge && !g.isHead && (
-                <circle cx={cx} cy={cy} r={CIRCLE_R + 1.5}
-                  fill="none" stroke={nodeColor} strokeWidth={1} opacity={0.5} />
+                <circle cx={cx} cy={cy} r={CIRCLE_R + 2}
+                  fill="none" stroke={nodeColor} strokeWidth={1} opacity={0.55} />
               )}
               {/* Ghost-label hover hit-area — pointer-events re-enabled on this element only */}
               {ghostLabel && (
@@ -271,10 +272,12 @@ function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
   }
 
   const groups = Array.from(groupMap.values());
-  const showGroups = groups.slice(0, 1);
-  const showTags = tagList.slice(0, showGroups.length < 1 ? 1 : 0);
+  const showGroups = groups.slice(0, 2);
+  const showTags = tagList.slice(0, Math.max(0, 2 - showGroups.length));
   const extra = (groups.length - showGroups.length) + (tagList.length - showTags.length);
   const allNames = [...groups.map(g => g.name), ...tagList].join(', ');
+  const totalBadges = showGroups.length + showTags.length;
+  const badgeMaxW = totalBadges <= 1 ? 130 : 64;
 
   const badgeBg = selected ? `${laneColor}55` : `${laneColor}38`;
   const badgeText = selected ? '#ffffff' : laneColor;
@@ -304,7 +307,7 @@ function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
           <span
             key={g.name}
             className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
-            style={{ maxWidth: 138, background: badgeBg, color: badgeText, border: badgeBorder }}
+            style={{ maxWidth: badgeMaxW, background: badgeBg, color: badgeText, border: badgeBorder }}
             onMouseEnter={e => onEnter(e, g.name, { local: g.local, remote: g.remote }, badgeBg, badgeText, badgeBorder)}
           >
             <span className="min-w-0 truncate">{g.name}</span>
@@ -316,7 +319,7 @@ function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
           <span
             key={tag}
             className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
-            style={{ maxWidth: 138, background: '#a78bfa38', color: '#c4b5fd', border: '1px solid #a78bfa70' }}
+            style={{ maxWidth: badgeMaxW, background: '#a78bfa38', color: '#c4b5fd', border: '1px solid #a78bfa70' }}
             onMouseEnter={e => onEnter(e, tag, { isTag: true }, '#a78bfa38', '#c4b5fd', '1px solid #a78bfa70')}
           >
             <span className="min-w-0 truncate">{tag}</span>
@@ -358,7 +361,8 @@ const GraphRow = memo(function GraphRow({
   const lci = row.graph?.colorIndex ?? 0;
   const bandColor = LANE_COLORS[lci % LANE_COLORS.length];
   const lcx = BRANCH_COL_W + laneX(lane);
-  const bandGradient = `linear-gradient(90deg, transparent ${Math.max(0, lcx - 20)}px, ${bandColor}18 ${lcx}px, ${bandColor}1c ${lcx + 14}px, ${bandColor}10 ${lcx + 60}px, ${bandColor}08 ${lcx + 140}px, ${bandColor}03 ${lcx + 300}px, transparent ${lcx + 450}px)`;
+  const graphRight = BRANCH_COL_W + GRAPH_COL_W; // Hard stop — band must not cross into commit message column
+  const bandGradient = `linear-gradient(90deg, transparent ${Math.max(0, lcx - 20)}px, ${bandColor}0e ${lcx}px, ${bandColor}12 ${lcx + 12}px, ${bandColor}09 ${Math.min(lcx + 55, graphRight - 20)}px, transparent ${graphRight}px)`;
 
   return (
     <button
