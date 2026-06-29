@@ -18,14 +18,12 @@ export function App() {
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const conflict = useGitStore(s => s.conflict);
   const diff = useGitStore(s => s.diff);
-  const status = useGitStore(s => s.status);
   const aiText = useGitStore(s => s.aiText);
   const settingsOpen = useGitStore(s => s.settingsOpen);
+  const rightPanelTab = useGitStore(s => s.rightPanelTab);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [rightWidth, setRightWidth] = useState(430);
   const [consoleHeight, setConsoleHeight] = useState(144);
-  const changedCount = status.staged.length + status.unstaged.length + status.untracked.length + status.conflicted.length;
-  const hasInspectorContent = Boolean(changedCount || selectedCommit || conflict || diff);
 
   useEffect(() => {
     void gitService.getSettings().then(settings => {
@@ -81,24 +79,42 @@ export function App() {
           onMouseDown={startResize(event => setRightWidth(Math.min(640, Math.max(360, window.innerWidth - event.clientX))))}
         />
         <aside className="relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-[#080d19]" style={{ width: rightWidth }}>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {changedCount > 0 && <StatusPanel />}
-            {selectedCommit && !conflict && (
-              <div className={`${diff ? 'basis-[42%]' : 'flex-1'} min-h-[180px] overflow-auto border-b border-pilot-line bg-[#0b1120]`}>
-                <CommitDetails />
-              </div>
-            )}
-            {conflict ? <MergeResolver /> : diff ? <DiffViewer /> : null}
-            {!hasInspectorContent && (
-              <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-slate-500">
-                Select a commit or changed file to inspect it.
-              </div>
-            )}
+          {/* Tab bar */}
+          <div className="flex shrink-0 border-b border-pilot-line bg-[#0d1324]">
+            <button
+              className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${rightPanelTab === 'working' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-500 hover:text-slate-300'}`}
+              onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
+            >
+              Working Directory
+            </button>
+            <button
+              className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${rightPanelTab === 'review' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-500 hover:text-slate-300'}`}
+              onClick={() => useGitStore.setState({ rightPanelTab: 'review' })}
+            >
+              Code Review
+            </button>
           </div>
-          {(changedCount > 0 || diff || aiText) && (
-            <div className="max-h-[32%] shrink-0 overflow-auto border-t border-pilot-line bg-pilot-panel">
+
+          {rightPanelTab === 'working' ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <StatusPanel />
               <CommitPanel />
-              <AiPanel />
+              {aiText && <AiPanel />}
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {selectedCommit && !conflict && (
+                <div className={`${diff ? 'basis-[42%]' : 'flex-1'} min-h-[180px] overflow-auto border-b border-pilot-line bg-[#0b1120]`}>
+                  <CommitDetails />
+                </div>
+              )}
+              {conflict ? <MergeResolver /> : diff ? <DiffViewer /> : null}
+              {!selectedCommit && !conflict && !diff && (
+                <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-slate-500">
+                  Select a commit to inspect it.
+                </div>
+              )}
+              {aiText && <AiPanel />}
             </div>
           )}
           {settingsOpen && <SettingsPanel />}

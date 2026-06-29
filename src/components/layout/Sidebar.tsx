@@ -157,7 +157,7 @@ export function Sidebar() {
           }
         </Section>
 
-        <Section icon={<GitBranch size={13} />} title="Local Branches">
+        <Section icon={<GitBranch size={13} />} title="Local Branches" count={branches.filter(b => !b.remote).length}>
           <div className="flex gap-1 px-2 pb-1">
             <input
               className="input h-6 flex-1 px-1.5 text-[11px]"
@@ -201,7 +201,7 @@ export function Sidebar() {
           ))}
         </Section>
 
-        <Section icon={<Globe size={13} />} title="Remotes">
+        <Section icon={<Globe size={13} />} title="Remotes" count={remotes.length}>
           {remotes.map(r => (
             <div key={r.name}>
               <div className="px-3 py-1 text-[11px] font-semibold text-slate-400">{r.name}</div>
@@ -221,7 +221,7 @@ export function Sidebar() {
           {remotes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No remotes</div>}
         </Section>
 
-        <Section icon={<Tag size={13} />} title="Tags">
+        <Section icon={<Tag size={13} />} title="Tags" count={tags.length}>
           {tags.map(t => (
             <SidebarRow
               key={t.name}
@@ -232,7 +232,7 @@ export function Sidebar() {
           {tags.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No tags</div>}
         </Section>
 
-        <Section icon={<Archive size={13} />} title="Stashes">
+        <Section icon={<Archive size={13} />} title="Stashes" count={stashes.length}>
           <div className="px-2 pb-1">
             <button
               className="icon-btn h-6 w-full justify-center text-[11px]"
@@ -280,7 +280,17 @@ export function Sidebar() {
   );
 }
 
-function Section({ title, icon, children }: { title: string; icon?: ReactNode; children: ReactNode }) {
+function Section({
+  title,
+  icon,
+  count,
+  children,
+}: {
+  title: string;
+  icon?: ReactNode;
+  count?: number;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(true);
   return (
     <section className="mb-1">
@@ -290,7 +300,10 @@ function Section({ title, icon, children }: { title: string; icon?: ReactNode; c
       >
         {icon}
         <span className="flex-1 text-left">{title}</span>
-        <span className="text-slate-600">{open ? 'v' : '>'}</span>
+        {!open && count !== undefined && (
+          <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[9px] font-bold text-slate-400">{count}</span>
+        )}
+        <span className="ml-1 text-slate-600">{open ? '▾' : '▸'}</span>
       </button>
       {open && <div className="space-y-0.5 pb-1">{children}</div>}
     </section>

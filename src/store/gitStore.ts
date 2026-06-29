@@ -48,6 +48,7 @@ type State = {
   conflict?: ParsedConflictFile;
   settings?: Settings;
   settingsOpen: boolean;
+  rightPanelTab: 'working' | 'review';
   console: string[];
   problems: string[];
   aiText: string;
@@ -85,6 +86,7 @@ export const useGitStore = create<State>((set, get) => ({
   stashes: [],
   tags: [],
   settingsOpen: false,
+  rightPanelTab: 'working',
   console: [],
   problems: [],
   aiText: '',

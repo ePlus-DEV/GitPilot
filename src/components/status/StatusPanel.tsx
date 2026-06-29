@@ -1,4 +1,5 @@
-import { FilePlus2, Minus, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, FilePlus2, Minus, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import type { GitFileStatus } from '../../types/git';
@@ -8,106 +9,197 @@ export function StatusPanel() {
   const repo = useGitStore(s => s.repo?.path);
   const run = useGitStore(s => s.run);
   const loadConflict = useGitStore(s => s.loadConflict);
-  const act = (label: string, fn: () => Promise<unknown>) => repo && run(label, fn, 'status');
-  const total =
-    status.staged.length +
-    status.unstaged.length +
-    status.untracked.length +
-    status.conflicted.length;
+  const [stagedOpen, setStagedOpen] = useState(true);
+  const [unstagedOpen, setUnstagedOpen] = useState(true);
 
-  if (total === 0) return null;
+  const act = (label: string, fn: () => Promise<unknown>) => repo && run(label, fn, 'status');
+
+  const staged = status.staged;
+  const unstaged = [...status.unstaged, ...status.untracked, ...status.conflicted];
+  const stagedCount = staged.length;
+  const unstagedCount = unstaged.length;
 
   return (
-    <section className="flex h-[34%] min-h-[168px] max-h-[280px] shrink-0 flex-col overflow-hidden border-b border-pilot-line bg-pilot-panel">
-      <div className="flex items-center justify-between gap-3 border-b border-pilot-line px-3 py-2">
-        <div className="min-w-0">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Changes</h2>
-          <p className="text-[11px] text-slate-500">{total} file{total === 1 ? '' : 's'} changed</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <button className="icon-btn" title="Stage all" onClick={() => act('stage all', () => gitService.stageAll(repo!))}>
-            <Plus size={13} />
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Staged section */}
+      <div className="shrink-0 border-b border-pilot-line/60">
+        <div className="flex items-center gap-1 bg-[#0b1120] px-2 py-1.5">
+          <button
+            className="flex flex-1 items-center gap-1.5 text-left"
+            onClick={() => setStagedOpen(o => !o)}
+          >
+            <ChevronRight
+              size={12}
+              className={`shrink-0 text-slate-500 transition-transform ${stagedOpen ? 'rotate-90' : ''}`}
+            />
+            <span className="text-[11px] font-semibold text-slate-400">
+              Staged ({stagedCount})
+            </span>
           </button>
-          <button className="icon-btn" title="Unstage all" onClick={() => act('unstage all', () => gitService.unstageAll(repo!))}>
-            <Minus size={13} />
-          </button>
+          {repo && (
+            <button
+              className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-200"
+              title="Stage all"
+              onClick={() => act('stage all', () => gitService.stageAll(repo))}
+            >
+              <Plus size={12} />
+            </button>
+          )}
+          {repo && (
+            <button
+              className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-200"
+              title="Unstage all"
+              onClick={() => act('unstage all', () => gitService.unstageAll(repo))}
+            >
+              <Minus size={12} />
+            </button>
+          )}
         </div>
+        {stagedOpen && stagedCount > 0 && (
+          <div className="overflow-auto">
+            {staged.map(f => (
+              <FileRow
+                key={'s-' + f.path}
+                file={f}
+                action="Unstage"
+                actionIcon={<Minus size={11} />}
+                onAction={() => act('unstage', () => gitService.unstageFile(repo!, f.path))}
+                cached
+              />
+            ))}
+          </div>
+        )}
+        {stagedOpen && stagedCount === 0 && (
+          <div className="px-6 py-2 text-[11px] text-slate-600">No staged files</div>
+        )}
       </div>
 
-      {total > 0 && (
-        <div className="min-h-0 flex-1 overflow-auto py-2">
-          <Group title="Staged" files={status.staged} action="Unstage" onAction={f => act('unstage', () => gitService.unstageFile(repo!, f.path))} cached />
-          <Group title="Unstaged" files={status.unstaged} action="Stage" onAction={f => act('stage', () => gitService.stageFile(repo!, f.path))} />
-          <Group title="Untracked" files={status.untracked} action="Add" onAction={f => act('stage', () => gitService.stageFile(repo!, f.path))} />
-          <Group title="Conflicted" files={status.conflicted} action="Resolve" onAction={f => void loadConflict(f.path)} />
+      {/* Unstaged section */}
+      <div className="flex min-h-0 flex-col border-b border-pilot-line/60">
+        <div className="flex items-center gap-1 bg-[#0b1120] px-2 py-1.5">
+          <button
+            className="flex flex-1 items-center gap-1.5 text-left"
+            onClick={() => setUnstagedOpen(o => !o)}
+          >
+            <ChevronRight
+              size={12}
+              className={`shrink-0 text-slate-500 transition-transform ${unstagedOpen ? 'rotate-90' : ''}`}
+            />
+            <span className="text-[11px] font-semibold text-slate-400">
+              Unstaged ({unstagedCount})
+            </span>
+          </button>
+          {repo && unstagedCount > 0 && (
+            <button
+              className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-200"
+              title="Stage all changes"
+              onClick={() => act('stage all', () => gitService.stageAll(repo))}
+            >
+              <Plus size={12} />
+            </button>
+          )}
         </div>
-      )}
+        {unstagedOpen && (
+          <div className="min-h-0 flex-1 overflow-auto">
+            {status.unstaged.map(f => (
+              <FileRow
+                key={'u-' + f.path}
+                file={f}
+                action="Stage"
+                actionIcon={<Plus size={11} />}
+                onAction={() => act('stage', () => gitService.stageFile(repo!, f.path))}
+                onDiscard={() => repo && confirm(`Discard ${f.path}?`) && run('discard', () => gitService.discardFile(repo, f.path), 'status')}
+              />
+            ))}
+            {status.untracked.map(f => (
+              <FileRow
+                key={'n-' + f.path}
+                file={f}
+                action="Add"
+                actionIcon={<FilePlus2 size={11} />}
+                onAction={() => act('stage', () => gitService.stageFile(repo!, f.path))}
+                onDelete={() => repo && confirm(`Delete ${f.path}?`) && run('delete', () => gitService.deleteUntrackedFile(repo, f.path), 'status')}
+              />
+            ))}
+            {status.conflicted.map(f => (
+              <FileRow
+                key={'c-' + f.path}
+                file={f}
+                action="Resolve"
+                actionIcon={<FilePlus2 size={11} />}
+                onAction={() => void loadConflict(f.path)}
+                conflicted
+              />
+            ))}
+            {unstagedCount === 0 && (
+              <div className="px-6 py-2 text-[11px] text-slate-600">No unstaged changes</div>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
 
-function Group({
-  title,
-  files,
+function FileRow({
+  file,
   action,
+  actionIcon,
   onAction,
+  onDiscard,
+  onDelete,
   cached = false,
+  conflicted = false,
 }: {
-  title: string;
-  files: GitFileStatus[];
+  file: GitFileStatus;
   action: string;
-  onAction: (f: GitFileStatus) => void;
+  actionIcon: React.ReactNode;
+  onAction: () => void;
+  onDiscard?: () => void;
+  onDelete?: () => void;
   cached?: boolean;
+  conflicted?: boolean;
 }) {
   const select = useGitStore(st => st.setSelectedFile);
-  const repo = useGitStore(st => st.repo?.path);
-  const run = useGitStore(st => st.run);
-
-  if (files.length === 0) return null;
 
   return (
-    <div className="mb-3">
-      <div className="mb-1 flex items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-        <span>{title}</span>
-        <span>{files.length}</span>
-      </div>
-      <div className="space-y-0.5">
-        {files.map(f => (
-          <div className="group flex h-8 items-center gap-2 px-3 hover:bg-slate-800/60" key={title + f.path}>
-            <button
-              onClick={() => void select(f, cached)}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs text-slate-300"
-              title={f.path}
-            >
-              <span className="w-5 shrink-0 text-center font-mono text-[10px] text-pilot-blue">
-                {f.displayStatus || f.indexStatus + f.worktreeStatus}
-              </span>
-              <span className="truncate">{f.path}</span>
-            </button>
-
-            <button className="icon-btn h-6 w-6 justify-center p-0 opacity-0 group-hover:opacity-100" title={action} onClick={() => onAction(f)}>
-              <FilePlus2 size={12} />
-            </button>
-            {title !== 'Staged' && title !== 'Untracked' ? (
-              <button
-                className="icon-btn h-6 w-6 justify-center p-0 opacity-0 group-hover:opacity-100"
-                title="Discard changes"
-                onClick={() => repo && confirm(`Discard ${f.path}?`) && run('discard', () => gitService.discardFile(repo, f.path), 'status')}
-              >
-                <RotateCcw size={12} />
-              </button>
-            ) : null}
-            {title === 'Untracked' ? (
-              <button
-                className="icon-btn h-6 w-6 justify-center p-0 text-red-300 opacity-0 group-hover:opacity-100"
-                title="Delete untracked file"
-                onClick={() => repo && confirm(`Delete ${f.path}?`) && run('delete', () => gitService.deleteUntrackedFile(repo, f.path), 'status')}
-              >
-                <Trash2 size={12} />
-              </button>
-            ) : null}
-          </div>
-        ))}
+    <div className="group flex h-7 items-center gap-1.5 px-3 hover:bg-slate-800/60">
+      <span className={`w-4 shrink-0 text-center font-mono text-[10px] ${conflicted ? 'text-red-400' : 'text-pilot-blue'}`}>
+        {file.displayStatus || (file.indexStatus + file.worktreeStatus).trim() || '?'}
+      </span>
+      <button
+        onClick={() => void select(file, cached)}
+        className="min-w-0 flex-1 truncate text-left text-[11px] text-slate-300"
+        title={file.path}
+      >
+        {file.path}
+      </button>
+      <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
+        <button
+          className="rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+          title={action}
+          onClick={e => { e.stopPropagation(); onAction(); }}
+        >
+          {actionIcon}
+        </button>
+        {onDiscard && (
+          <button
+            className="rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+            title="Discard changes"
+            onClick={e => { e.stopPropagation(); onDiscard(); }}
+          >
+            <RotateCcw size={11} />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            className="rounded p-0.5 text-red-400 hover:bg-red-900/60 hover:text-red-300"
+            title="Delete file"
+            onClick={e => { e.stopPropagation(); onDelete(); }}
+          >
+            <Trash2 size={11} />
+          </button>
+        )}
       </div>
     </div>
   );
