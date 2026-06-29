@@ -1,6 +1,9 @@
 import { GitBranch, GitCompare, RotateCcw, Tag, Undo2 } from 'lucide-react';
+import { useState } from 'react';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
+import type { CommitFile } from '../../types/git';
 
 export function CommitDetails() {
   const repo = useGitStore(s => s.repo?.path);
@@ -10,6 +13,7 @@ export function CommitDetails() {
   const commitFilesError = useGitStore(s => s.commitFilesError);
   const run = useGitStore(s => s.run);
   const log = useGitStore(s => s.log);
+  const [fileMenu, setFileMenu] = useState<{ x: number; y: number; file: CommitFile }>();
 
   if (!commit) return null;
 
@@ -17,6 +21,28 @@ export function CommitDetails() {
   const revision = commit.hash.trim() || commit.shortHash.trim();
   const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
   const runCommitAction = (label: string, fn: () => Promise<unknown>) => repo && void run(label, fn);
+  const openCommitFileDiff = (file: CommitFile) => {
+    if (!repo || !revision || !file.path.trim()) return;
+    gitService
+      .getCommitFileDiff(repo, revision, file.path)
+      .then(diff => useGitStore.setState({ diff }))
+      .catch(e => log(String((e as Error).message ?? e)));
+  };
+  const copyText = (label: string, value: string) =>
+    void navigator.clipboard.writeText(value).then(() => log(`${label}: ${value}`)).catch(() => log(value));
+  const commitFileMenuItems = (file: CommitFile): ContextMenuItem[] => [
+    { label: 'Show file diff', action: () => openCommitFileDiff(file) },
+    {
+      label: 'Restore file from this commit',
+      action: () => {
+        if (confirm(`Restore ${file.path} from ${short} into the working tree?`))
+          runCommitAction('restore file from commit', () => gitService.restoreFileFromCommit(repo!, revision, file.path));
+      },
+    },
+    { label: 'file-separator', separator: true, action: () => undefined },
+    { label: 'Copy file path', action: () => copyText('Copied file path', file.path) },
+    { label: 'Copy commit sha', action: () => copyText('Copied commit sha', revision) },
+  ];
 
   return (
     <section className="flex min-h-0 flex-col bg-[#161b22]">
@@ -83,12 +109,10 @@ export function CommitDetails() {
               className="flex h-7 w-full min-w-0 items-center gap-2 rounded px-2 text-left text-xs text-slate-300 hover:bg-[#21262d]"
               key={`${f.status}-${f.path}`}
               title={f.path}
-              onClick={() => {
-                if (!repo || !revision || !f.path.trim()) return;
-                gitService
-                  .getCommitFileDiff(repo, revision, f.path)
-                  .then(diff => useGitStore.setState({ diff }))
-                  .catch(e => log(String((e as Error).message ?? e)));
+              onClick={() => openCommitFileDiff(f)}
+              onContextMenu={event => {
+                event.preventDefault();
+                setFileMenu({ x: event.clientX, y: event.clientY, file: f });
               }}
             >
               <span className="w-6 shrink-0 text-center font-mono text-[10px] text-pilot-blue">{f.status}</span>
@@ -97,6 +121,15 @@ export function CommitDetails() {
           ))}
         </div>
       </div>
+      {fileMenu && (
+        <ContextMenu
+          x={fileMenu.x}
+          y={fileMenu.y}
+          title={fileMenu.file.path}
+          items={commitFileMenuItems(fileMenu.file)}
+          onClose={() => setFileMenu(undefined)}
+        />
+      )}
     </section>
   );
 }
