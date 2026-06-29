@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { ChevronDown, EyeOff, GitCommitHorizontal, Pencil, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, Cloud, EyeOff, GitCommitHorizontal, Monitor, Pencil, RefreshCw, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
@@ -17,10 +17,11 @@ const MAX_LANES = 12;
 const MAX_GRAPH_CHARS = MAX_LANES * 2;
 const GRAPH_W = MAX_LANES * LANE_W + PAD_LEFT * 2;
 const GRAPH_COL_W = GRAPH_W + 4;
-const AUTHOR_W = 120;
+const BRANCH_COL_W = 148;
+const AUTHOR_W = 110;
 const DATE_W = 72;
 const HASH_W = 64;
-const CHANGES_W = 90;
+const CHANGES_W = 80;
 const LOAD_MORE_H = 58;
 
 type RowData = {
@@ -57,13 +58,6 @@ function cleanRef(ref: string) {
   return ref.replace('HEAD -> ', '').replace('tag: ', '');
 }
 
-function refClassName(ref: string, selected: boolean) {
-  if (selected) return 'bg-white/20 text-white';
-  if (ref.includes('HEAD')) return 'bg-yellow-500/20 text-yellow-300';
-  if (ref.includes('origin/')) return 'bg-emerald-500/15 text-emerald-300';
-  if (ref.startsWith('tag:')) return 'bg-violet-500/15 text-violet-300';
-  return 'bg-teal-500/15 text-teal-200';
-}
 
 const laneX = (col: number) => PAD_LEFT + Math.max(0, col) * LANE_W;
 
@@ -119,10 +113,16 @@ function GraphSvg({ row, height }: { row: RowData; height: number }) {
           strokeWidth={STROKE_W} fill="none" strokeLinecap="round" />
       ))}
 
-      {/* Commit node */}
-      <circle cx={cx} cy={cy} r={CIRCLE_R} fill={nodeColor} />
-      <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
-      <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={nodeColor} opacity={0.5} />
+      {/* Commit node — larger transparent hit-area for hover tooltip */}
+      <g>
+        <title>{g.refs.length > 0
+          ? g.refs.map(r => r.name).join('\n')
+          : row.commit.message.slice(0, 60)}</title>
+        <circle cx={cx} cy={cy} r={CIRCLE_R + 5} fill="transparent" />
+        <circle cx={cx} cy={cy} r={CIRCLE_R} fill={nodeColor} />
+        <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
+        <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={nodeColor} opacity={0.5} />
+      </g>
 
       {/* HEAD ring */}
       {g.isHead && (
@@ -161,6 +161,85 @@ function ChangesBar({ ins, del, maxTotal }: { ins: number; del: number; maxTotal
   );
 }
 
+function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
+  const laneColor = row.graph
+    ? LANE_COLORS[row.graph.colorIndex % LANE_COLORS.length]
+    : LANE_COLORS[0];
+
+  const allRefs = row.commit.refs;
+  if (allRefs.length === 0) return <div className="shrink-0" style={{ width: BRANCH_COL_W }} />;
+
+  const isHead = allRefs.some(r => r.startsWith('HEAD ->') || r === 'HEAD');
+
+  // Group local + remote branches by logical name (strip remote-name prefix from remote refs)
+  type Group = { name: string; local: boolean; remote: boolean };
+  const groupMap = new Map<string, Group>();
+  const tagList: string[] = [];
+
+  for (const ref of allRefs) {
+    if (ref === 'HEAD') continue;
+    const clean = cleanRef(ref);
+    if (!clean) continue;
+    if (ref.startsWith('tag:')) { tagList.push(clean); continue; }
+    const isRemote = clean.includes('/');
+    const base = isRemote ? clean.slice(clean.indexOf('/') + 1) : clean;
+    if (!base || base === 'HEAD') continue;
+    const g = groupMap.get(base);
+    if (g) { if (isRemote) g.remote = true; else g.local = true; }
+    else groupMap.set(base, { name: base, local: !isRemote, remote: isRemote });
+  }
+
+  const groups = Array.from(groupMap.values());
+  const showGroups = groups.slice(0, 1);
+  const showTags = tagList.slice(0, showGroups.length < 1 ? 1 : 0);
+  const extra = (groups.length - showGroups.length) + (tagList.length - showTags.length);
+  const allNames = [...groups.map(g => g.name), ...tagList].join('\n');
+
+  // Badge style: solid colored background like GitKraken labels
+  const badgeBg = selected ? `${laneColor}55` : `${laneColor}38`;
+  const badgeText = selected ? '#ffffff' : laneColor;
+  const badgeBorder = selected ? `1px solid ${laneColor}cc` : `1px solid ${laneColor}70`;
+
+  return (
+    <div
+      className="flex shrink-0 items-center justify-end gap-0.5 overflow-hidden px-1"
+      style={{ width: BRANCH_COL_W }}
+    >
+      {isHead && (
+        <span className="shrink-0 text-[11px] font-bold leading-none text-yellow-400" title="HEAD">✓</span>
+      )}
+      {showGroups.map(g => (
+        <span
+          key={g.name}
+          title={g.name}
+          className="flex min-w-0 shrink-0 cursor-default items-center gap-1 rounded px-1.5 leading-[17px] text-[10px] font-semibold"
+          style={{ maxWidth: 130, background: badgeBg, color: badgeText, border: badgeBorder }}
+        >
+          <span className="min-w-0 truncate">{g.name}</span>
+          {g.local && <Monitor size={9} className="shrink-0 opacity-80" />}
+          {g.remote && <Cloud size={9} className="shrink-0 opacity-80" />}
+        </span>
+      ))}
+      {showTags.map(tag => (
+        <span
+          key={tag}
+          title={tag}
+          className="flex min-w-0 shrink-0 cursor-default items-center gap-1 rounded px-1.5 leading-[17px] text-[10px] font-semibold"
+          style={{ maxWidth: 130, background: '#a78bfa38', color: '#c4b5fd', border: '1px solid #a78bfa70' }}
+        >
+          <span className="min-w-0 truncate">{tag}</span>
+          <Tag size={9} className="shrink-0 opacity-80" />
+        </span>
+      ))}
+      {extra > 0 && (
+        <span title={allNames} className="shrink-0 cursor-default rounded px-0.5 text-[9px] text-slate-500">
+          +{extra}
+        </span>
+      )}
+    </div>
+  );
+}
+
 const GraphRow = memo(function GraphRow({
   row,
   selected,
@@ -176,8 +255,6 @@ const GraphRow = memo(function GraphRow({
   onClick: () => void;
   onContextMenu: (event: ReactMouseEvent) => void;
 }) {
-  const refs = row.commit.refs.slice(0, 4);
-  const hasExtraRefs = row.commit.refs.length > refs.length;
   const ins = row.commit.insertions ?? 0;
   const del = row.commit.deletions ?? 0;
 
@@ -191,31 +268,16 @@ const GraphRow = memo(function GraphRow({
       className={`flex w-full select-none items-center border-t border-pilot-line/60 text-left transition-colors hover:bg-[#21262d]/60 ${selected ? 'bg-teal-900/70 text-white hover:bg-teal-900/70' : 'text-slate-300'} ${dimmed ? 'opacity-35' : ''}`}
       style={{ height: ROW_H }}
     >
+      {/* Branch column — leftmost */}
+      <BranchCell row={row} selected={selected} />
+
       {/* Graph column */}
       <div className="shrink-0 overflow-hidden" style={{ width: GRAPH_COL_W }}>
         <GraphSvg row={row} height={ROW_H} />
       </div>
 
-      {/* Message + refs column */}
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-1.5">
-        {refs.length > 0 && (
-          <div className="flex items-center gap-1">
-            {refs.map(ref => (
-              <span
-                key={ref}
-                className={`shrink-0 truncate rounded px-1 py-0 text-[9px] font-semibold leading-4 ${refClassName(ref, selected)}`}
-                style={{ maxWidth: 100 }}
-              >
-                {cleanRef(ref)}
-              </span>
-            ))}
-            {hasExtraRefs && (
-              <span className={`rounded px-1 py-0 text-[9px] leading-4 ${selected ? 'bg-white/15 text-white' : 'bg-[#21262d] text-slate-400'}`}>
-                +{row.commit.refs.length - refs.length}
-              </span>
-            )}
-          </div>
-        )}
+      {/* Message column */}
+      <div className="flex min-w-0 flex-1 items-center px-1.5">
         <div className={`truncate text-xs ${selected ? 'font-medium text-white' : 'text-slate-200'}`}>
           {row.commit.message}
         </div>
@@ -592,8 +654,9 @@ export function GitGraph() {
 
       {/* Column headers */}
       <div className="flex shrink-0 select-none border-b border-pilot-line bg-pilot-bg text-[9px] font-bold uppercase tracking-wider text-slate-600">
+        <div className="shrink-0 px-2 py-1.5" style={{ width: BRANCH_COL_W }}>Branch</div>
         <div className="shrink-0" style={{ width: GRAPH_COL_W }} />
-        <div className="min-w-0 flex-1 px-2 py-1.5">Commit Message</div>
+        <div className="min-w-0 flex-1 px-2 py-1.5">Commit</div>
         <div className="shrink-0 px-2 py-1.5" style={{ width: CHANGES_W }}>Changes</div>
         <div className="shrink-0 px-2 py-1.5" style={{ width: AUTHOR_W }}>Author</div>
         <div className="shrink-0 px-2 py-1.5" style={{ width: DATE_W }}>Date</div>
@@ -614,6 +677,8 @@ export function GitGraph() {
             style={{ height: wdRowH, background: 'linear-gradient(90deg, #1c2128 0%, #0d1117 100%)' }}
             onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
           >
+            {/* Branch placeholder */}
+            <div className="shrink-0" style={{ width: BRANCH_COL_W }} />
             {/* WIP dot — white diamond-ish */}
             <div className="shrink-0 overflow-hidden" style={{ width: GRAPH_COL_W }}>
               <svg width={GRAPH_W} height={wdRowH} className="block overflow-hidden">

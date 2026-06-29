@@ -144,7 +144,7 @@ pub fn get_history(
 
     let mut args = vec![
         "log".to_string(),
-        "--graph".to_string(),
+        "--topo-order".to_string(),
         "--decorate".to_string(),
         "--date=short".to_string(),
         max_count,
