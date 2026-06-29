@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <defs>
+    <radialGradient id="bg" cx="44%" cy="36%" r="65%">
+      <stop offset="0%" stop-color="#16223a"/>
+      <stop offset="100%" stop-color="#080d16"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#38bdf8" stop-opacity="0.75"/>
+      <stop offset="45%"  stop-color="#a78bfa" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.45"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="50%" cy="50%" r="50%">
+      <stop offset="60%"  stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.35"/>
+    </radialGradient>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+  </defs>
+
+  <!-- Rim glow (blurred) -->
+  <circle cx="80" cy="80" r="72" fill="none"
+          stroke="url(#rim)" stroke-width="8" opacity="0.25" filter="url(#glow)"/>
+
+  <!-- Background -->
+  <circle cx="80" cy="80" r="72" fill="url(#bg)"/>
+
+  <!-- Crisp rim -->
+  <circle cx="80" cy="80" r="72" fill="none" stroke="url(#rim)" stroke-width="1.2"/>
+
+  <!-- Vignette -->
+  <circle cx="80" cy="80" r="72" fill="url(#vignette)"/>
+
+  <!-- Git graph: main lane x=72, feature lane x=100 -->
+  <line x1="72" y1="10"  x2="72" y2="46" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+  <line x1="72" y1="57"  x2="72" y2="95" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+  <line x1="72" y1="108" x2="72" y2="150" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+  <line x1="100" y1="67" x2="100" y2="88" stroke="#a78bfa" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Fork: (72,46)→(100,67), mx=86 -->
+  <path d="M 72 46 C 86 46 86 67 100 67"
+        stroke="#38bdf8" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.72"/>
+
+  <!-- Merge: (100,88)→(72,108), mx=86 -->
+  <path d="M 100 88 C 86 88 86 108 72 108"
+        stroke="#a78bfa" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.72"/>
+
+  <!-- Node: main top (72,28) -->
+  <circle cx="72" cy="28" r="10"  fill="#38bdf8" opacity="0.10"/>
+  <circle cx="72" cy="28" r="5"   fill="#38bdf8"/>
+  <circle cx="72" cy="28" r="3.2" fill="#080d16"/>
+  <circle cx="72" cy="28" r="3.2" fill="#38bdf8" opacity="0.55"/>
+
+  <!-- Node: fork commit (72,52) -->
+  <circle cx="72" cy="52" r="10"  fill="#38bdf8" opacity="0.10"/>
+  <circle cx="72" cy="52" r="5"   fill="#38bdf8"/>
+  <circle cx="72" cy="52" r="3.2" fill="#080d16"/>
+  <circle cx="72" cy="52" r="3.2" fill="#38bdf8" opacity="0.55"/>
+
+  <!-- Node: feature HEAD (100,78) — violet, larger, HEAD ring -->
+  <circle cx="100" cy="78" r="16"  fill="#a78bfa" opacity="0.10" filter="url(#glow)"/>
+  <circle cx="100" cy="78" r="11"  fill="#a78bfa" opacity="0.12"/>
+  <circle cx="100" cy="78" r="6"   fill="#a78bfa"/>
+  <circle cx="100" cy="78" r="3.8" fill="#080d16"/>
+  <circle cx="100" cy="78" r="3.8" fill="#a78bfa" opacity="0.55"/>
+  <circle cx="100" cy="78" r="9.5" fill="none" stroke="#a78bfa" stroke-width="1.5" opacity="0.85"/>
+
+  <!-- Node: merge commit (72,102) -->
+  <circle cx="72" cy="102" r="10"  fill="#38bdf8" opacity="0.10"/>
+  <circle cx="72" cy="102" r="5"   fill="#38bdf8"/>
+  <circle cx="72" cy="102" r="3.2" fill="#080d16"/>
+  <circle cx="72" cy="102" r="3.2" fill="#38bdf8" opacity="0.55"/>
+  <circle cx="72" cy="102" r="7.5" fill="none" stroke="#38bdf8" stroke-width="1" opacity="0.42"/>
+
+  <!-- Node: main bottom (72,128) -->
+  <circle cx="72" cy="128" r="10"  fill="#38bdf8" opacity="0.10"/>
+  <circle cx="72" cy="128" r="5"   fill="#38bdf8"/>
+  <circle cx="72" cy="128" r="3.2" fill="#080d16"/>
+  <circle cx="72" cy="128" r="3.2" fill="#38bdf8" opacity="0.55"/>
+
+  <!-- Emerald "active" accent -->
+  <circle cx="118" cy="116" r="4"   fill="#34d399" opacity="0.9"/>
+  <circle cx="118" cy="116" r="8"   fill="#34d399" opacity="0.18"/>
+</svg>
