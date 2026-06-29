@@ -57,7 +57,7 @@ export function TopBar() {
   const behind = status.behind ?? 0;
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-pilot-line bg-[#0d1324] px-3">
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-pilot-line bg-[#161b22] px-3">
       <div className="flex shrink-0 items-center gap-1.5 border-r border-pilot-line pr-3">
         <GitBranch size={16} className="text-pilot-blue" />
         <span className="text-sm font-bold text-slate-100">GitPilot</span>
@@ -79,7 +79,7 @@ export function TopBar() {
         </div>
       )}
 
-      <div className="flex shrink-0 items-center gap-1.5 rounded border border-pilot-line bg-slate-800 px-2.5 py-1">
+      <div className="flex shrink-0 items-center gap-1.5 rounded border border-pilot-line bg-[#21262d] px-2.5 py-1">
         <GitBranch size={12} className="shrink-0 text-pilot-blue" />
         <span className="max-w-[140px] truncate text-xs font-medium">{branch}</span>
         {behind > 0 && <span className="text-[10px] text-amber-400">down {behind}</span>}

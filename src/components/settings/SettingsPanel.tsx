@@ -9,7 +9,7 @@ export function SettingsPanel() {
   const set = (k: keyof typeof settings, v: string) => useGitStore.setState({ settings: { ...settings, [k]: v } });
 
   return (
-    <div className="absolute inset-0 z-20 flex flex-col bg-[#080d19] shadow-2xl shadow-black/50">
+    <div className="absolute inset-0 z-20 flex flex-col bg-[#0d1117] shadow-2xl shadow-black/50">
       <div className="flex h-12 items-center justify-between border-b border-pilot-line px-3">
         <h3 className="text-sm font-semibold text-slate-100">Settings</h3>
         <button className="icon-btn h-8 w-8 justify-center p-0" title="Close settings" onClick={() => useGitStore.setState({ settingsOpen: false })}>

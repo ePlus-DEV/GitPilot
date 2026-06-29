@@ -19,11 +19,11 @@ export function CommitDetails() {
   const runCommitAction = (label: string, fn: () => Promise<unknown>) => repo && void run(label, fn);
 
   return (
-    <section className="flex min-h-0 flex-col bg-[#0b1120]">
+    <section className="flex min-h-0 flex-col bg-[#161b22]">
       <div className="min-w-0 shrink-0 border-b border-pilot-line px-4 py-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-pilot-blue">Information</h2>
-          <span className="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-pilot-blue">{short}</span>
+          <span className="shrink-0 rounded bg-[#21262d] px-1.5 py-0.5 font-mono text-[10px] text-pilot-blue">{short}</span>
         </div>
 
         <div className="break-words text-base font-semibold leading-snug text-slate-100">{commit.message}</div>
@@ -80,7 +80,7 @@ export function CommitDetails() {
           {!commitFilesLoading && !commitFilesError && commitFiles.length === 0 && <div className="py-1 text-xs text-slate-500">No file list for this commit.</div>}
           {commitFiles.map(f => (
             <button
-              className="flex h-7 w-full min-w-0 items-center gap-2 rounded px-2 text-left text-xs text-slate-300 hover:bg-slate-800"
+              className="flex h-7 w-full min-w-0 items-center gap-2 rounded px-2 text-left text-xs text-slate-300 hover:bg-[#21262d]"
               key={`${f.status}-${f.path}`}
               title={f.path}
               onClick={() => {

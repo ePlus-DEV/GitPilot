@@ -11,37 +11,37 @@ body {
 
 /* Standard button */
 .btn {
-  @apply rounded border border-pilot-line bg-slate-800 px-2 py-1 text-xs text-slate-200
-         hover:bg-slate-700 disabled:opacity-40 transition-colors;
+  @apply rounded border border-pilot-line bg-[#21262d] px-2 py-1 text-xs text-slate-300
+         hover:bg-[#30363d] disabled:opacity-40 transition-colors;
 }
 
 .btn-primary {
   @apply rounded bg-pilot-blue px-3 py-1.5 text-xs font-semibold text-slate-950
-         hover:bg-sky-300 transition-colors;
+         hover:brightness-110 transition-all;
 }
 
 /* Icon + label button (TopBar, Sidebar actions) */
 .icon-btn {
   @apply flex items-center gap-1.5 rounded border border-transparent px-2 py-1
-         text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-100
+         text-xs text-slate-400 hover:bg-[#21262d] hover:text-slate-100
          disabled:opacity-40 transition-colors;
 }
 
 .icon-btn.accent {
-  @apply border-pilot-line text-pilot-blue hover:bg-sky-900/40 hover:text-sky-300;
+  @apply border-pilot-line text-pilot-blue hover:bg-teal-900/30 hover:text-teal-300;
 }
 
 .input {
-  @apply rounded border border-pilot-line bg-slate-950 px-2 py-1 text-sm text-slate-100
+  @apply rounded border border-pilot-line bg-[#0d1117] px-2 py-1 text-sm text-slate-100
          outline-none focus:border-pilot-blue transition-colors;
 }
 
 .row {
-  @apply flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-slate-800;
+  @apply flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[#21262d];
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #27324d; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #38bdf844; }
+::-webkit-scrollbar-thumb { background: #21262d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #14b8a644; }

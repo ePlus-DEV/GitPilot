@@ -21,7 +21,7 @@ export function DiffViewer() {
   }
 
   const renderEditor = () => (
-    <div className="min-h-0 flex-1 overflow-auto bg-[#0b1020]">
+    <div className="min-h-0 flex-1 overflow-auto bg-[#0d1117]">
       {diff.patch ? (
         <PatchDiff
           key={`${diff.filePath}-${viewMode}`}
@@ -76,12 +76,12 @@ export function DiffViewer() {
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col bg-[#090e1b]">
+      <div className="flex min-h-0 flex-1 flex-col bg-[#0d1117]">
         {renderToolbar()}
         {renderEditor()}
       </div>
       {expanded && (
-        <div className="fixed inset-0 z-40 flex flex-col bg-[#090e1b]">
+        <div className="fixed inset-0 z-40 flex flex-col bg-[#0d1117]">
           {renderToolbar()}
           {renderEditor()}
         </div>

@@ -23,7 +23,7 @@ export function StatusPanel() {
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Staged section */}
       <div className="shrink-0 border-b border-pilot-line/60">
-        <div className="flex items-center gap-1 bg-[#0b1120] px-2 py-1.5">
+        <div className="flex items-center gap-1 bg-[#161b22] px-2 py-1.5">
           <button
             className="flex flex-1 items-center gap-1.5 text-left"
             onClick={() => setStagedOpen(o => !o)}
@@ -38,7 +38,7 @@ export function StatusPanel() {
           </button>
           {repo && (
             <button
-              className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-200"
+              className="rounded p-0.5 text-slate-500 hover:bg-[#30363d] hover:text-slate-200"
               title="Stage all"
               onClick={() => act('stage all', () => gitService.stageAll(repo))}
             >
@@ -47,7 +47,7 @@ export function StatusPanel() {
           )}
           {repo && (
             <button
-              className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-200"
+              className="rounded p-0.5 text-slate-500 hover:bg-[#30363d] hover:text-slate-200"
               title="Unstage all"
               onClick={() => act('unstage all', () => gitService.unstageAll(repo))}
             >
@@ -76,7 +76,7 @@ export function StatusPanel() {
 
       {/* Unstaged section */}
       <div className="flex min-h-0 flex-col border-b border-pilot-line/60">
-        <div className="flex items-center gap-1 bg-[#0b1120] px-2 py-1.5">
+        <div className="flex items-center gap-1 bg-[#161b22] px-2 py-1.5">
           <button
             className="flex flex-1 items-center gap-1.5 text-left"
             onClick={() => setUnstagedOpen(o => !o)}
@@ -91,7 +91,7 @@ export function StatusPanel() {
           </button>
           {repo && unstagedCount > 0 && (
             <button
-              className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-slate-200"
+              className="rounded p-0.5 text-slate-500 hover:bg-[#30363d] hover:text-slate-200"
               title="Stage all changes"
               onClick={() => act('stage all', () => gitService.stageAll(repo))}
             >
@@ -163,7 +163,7 @@ function FileRow({
   const select = useGitStore(st => st.setSelectedFile);
 
   return (
-    <div className="group flex h-7 items-center gap-1.5 px-3 hover:bg-slate-800/60">
+    <div className="group flex h-7 items-center gap-1.5 px-3 hover:bg-[#21262d]/60">
       <span className={`w-4 shrink-0 text-center font-mono text-[10px] ${conflicted ? 'text-red-400' : 'text-pilot-blue'}`}>
         {file.displayStatus || (file.indexStatus + file.worktreeStatus).trim() || '?'}
       </span>
@@ -176,7 +176,7 @@ function FileRow({
       </button>
       <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
         <button
-          className="rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+          className="rounded p-0.5 text-slate-400 hover:bg-[#30363d] hover:text-slate-200"
           title={action}
           onClick={e => { e.stopPropagation(); onAction(); }}
         >
@@ -184,7 +184,7 @@ function FileRow({
         </button>
         {onDiscard && (
           <button
-            className="rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+            className="rounded p-0.5 text-slate-400 hover:bg-[#30363d] hover:text-slate-200"
             title="Discard changes"
             onClick={e => { e.stopPropagation(); onDiscard(); }}
           >

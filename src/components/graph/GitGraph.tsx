@@ -76,7 +76,7 @@ function refClassName(ref: string, selected: boolean) {
   if (ref.includes('HEAD')) return 'bg-yellow-500/20 text-yellow-300';
   if (ref.includes('origin/')) return 'bg-emerald-500/15 text-emerald-300';
   if (ref.startsWith('tag:')) return 'bg-violet-500/15 text-violet-300';
-  return 'bg-sky-500/15 text-sky-200';
+  return 'bg-teal-500/15 text-teal-200';
 }
 
 // lane centre x = PAD_LEFT + laneIndex * LANE_W
@@ -144,7 +144,7 @@ function GraphSvg({ row, height }: { row: RowData; height: number }) {
 
       {/* node dot — drawn last so it covers lines */}
       <circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />
-      <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#090e1b" />
+      <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
       <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={row.color} opacity={0.5} />
       {/* HEAD ring */}
       {row.commit.head && (
@@ -175,7 +175,7 @@ const GraphRow = memo(function GraphRow({
       onMouseDown={e => e.preventDefault()}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={`flex w-full select-none items-center border-t border-pilot-line/60 text-left transition-colors hover:bg-slate-800/50 ${selected ? 'bg-sky-700/90 text-white hover:bg-sky-700/90' : 'text-slate-300'}`}
+      className={`flex w-full select-none items-center border-t border-pilot-line/60 text-left transition-colors hover:bg-[#21262d]/60 ${selected ? 'bg-teal-900/70 text-white hover:bg-teal-900/70' : 'text-slate-300'}`}
       style={{ height: ROW_H }}
     >
       {/* Graph column */}
@@ -197,7 +197,7 @@ const GraphRow = memo(function GraphRow({
               </span>
             ))}
             {hasExtraRefs && (
-              <span className={`rounded px-1 py-0 text-[9px] leading-4 ${selected ? 'bg-white/15 text-white' : 'bg-slate-700 text-slate-400'}`}>
+              <span className={`rounded px-1 py-0 text-[9px] leading-4 ${selected ? 'bg-white/15 text-white' : 'bg-[#21262d] text-slate-400'}`}>
                 +{row.commit.refs.length - refs.length}
               </span>
             )}
@@ -215,7 +215,7 @@ const GraphRow = memo(function GraphRow({
       >
         <div className="flex items-center gap-1.5">
           <span
-            className={`h-4 w-4 shrink-0 rounded text-center text-[9px] font-bold leading-4 ${selected ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-300'}`}
+            className={`h-4 w-4 shrink-0 rounded text-center text-[9px] font-bold leading-4 ${selected ? 'bg-white/20 text-white' : 'bg-[#21262d] text-slate-300'}`}
           >
             {row.commit.author.slice(0, 1).toUpperCase()}
           </span>
@@ -432,15 +432,15 @@ export function GitGraph() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090e1b]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-pilot-bg">
       {/* Filter bar */}
-      <div className="sticky top-0 z-10 shrink-0 border-b border-pilot-line bg-[#0d1324]">
+      <div className="sticky top-0 z-10 shrink-0 border-b border-pilot-line bg-[#161b22]">
         <div className="flex items-center gap-0">
           {/* HISTORY label + count */}
           <div className="flex shrink-0 items-center gap-2 border-r border-pilot-line px-3 py-2">
             <GitCommitHorizontal size={13} className="text-slate-500" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">History</span>
-            <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[9px] font-bold text-slate-300">
+            <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[9px] font-bold text-slate-300">
               {visibleRows.length}
             </span>
           </div>
@@ -511,7 +511,7 @@ export function GitGraph() {
       </div>
 
       {/* Column headers */}
-      <div className="flex shrink-0 select-none border-b border-pilot-line bg-[#0b1020] text-[9px] font-bold uppercase tracking-wider text-slate-600">
+      <div className="flex shrink-0 select-none border-b border-pilot-line bg-pilot-bg text-[9px] font-bold uppercase tracking-wider text-slate-600">
         <div className="shrink-0" style={{ width: GRAPH_COL_W }} />
         <div className="min-w-0 flex-1 px-2 py-1.5">Commit Message</div>
         <div className="shrink-0 px-2 py-1.5" style={{ width: AUTHOR_W }}>Author</div>
@@ -529,7 +529,7 @@ export function GitGraph() {
         {changedCount > 0 && (
           <button
             type="button"
-            className="flex w-full select-none items-center border-b border-pilot-line/60 bg-slate-800/30 text-left transition-colors hover:bg-slate-800/60"
+            className="flex w-full select-none items-center border-b border-pilot-line/60 bg-[#21262d]/30 text-left transition-colors hover:bg-[#21262d]/60"
             style={{ height: wdRowH }}
             onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
           >

@@ -66,21 +66,21 @@ export function App() {
           <Sidebar />
         </div>
         <div
-          className="w-1 shrink-0 cursor-col-resize border-r border-pilot-line bg-[#0d1324] hover:bg-pilot-blue/60"
+          className="w-1 shrink-0 cursor-col-resize border-r border-pilot-line bg-[#161b22] hover:bg-pilot-blue/60"
           onMouseDown={startResize(event => setSidebarWidth(Math.min(360, Math.max(190, event.clientX))))}
         />
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-[#090e1b]">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-pilot-bg">
           <GitGraph />
         </main>
 
         <div
-          className="w-1 shrink-0 cursor-col-resize bg-[#0d1324] hover:bg-pilot-blue/60"
+          className="w-1 shrink-0 cursor-col-resize bg-[#161b22] hover:bg-pilot-blue/60"
           onMouseDown={startResize(event => setRightWidth(Math.min(640, Math.max(360, window.innerWidth - event.clientX))))}
         />
-        <aside className="relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-[#080d19]" style={{ width: rightWidth }}>
+        <aside className="relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-[#0d1117]" style={{ width: rightWidth }}>
           {/* Tab bar */}
-          <div className="flex shrink-0 border-b border-pilot-line bg-[#0d1324]">
+          <div className="flex shrink-0 border-b border-pilot-line bg-[#161b22]">
             <button
               className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${rightPanelTab === 'working' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-500 hover:text-slate-300'}`}
               onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
@@ -104,7 +104,7 @@ export function App() {
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {selectedCommit && !conflict && (
-                <div className={`${diff ? 'basis-[42%]' : 'flex-1'} min-h-[180px] overflow-auto border-b border-pilot-line bg-[#0b1120]`}>
+                <div className={`${diff ? 'basis-[42%]' : 'flex-1'} min-h-[180px] overflow-auto border-b border-pilot-line bg-pilot-panel`}>
                   <CommitDetails />
                 </div>
               )}

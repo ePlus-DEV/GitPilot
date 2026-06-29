@@ -43,7 +43,7 @@ export function CommitPanel() {
           placeholder="Commit message (⌘↵ to commit)"
         />
         <button
-          className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded border border-pilot-line bg-slate-800 px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+          className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded border border-pilot-line bg-[#21262d] px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-[#30363d] hover:text-slate-200"
           title="Generate commit message with AI"
           onClick={generateMessage}
           disabled={!repo}
@@ -64,7 +64,7 @@ export function CommitPanel() {
           Commit
         </button>
         <button
-          className="rounded border border-pilot-line bg-slate-800 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-700"
+          className="rounded border border-pilot-line bg-[#21262d] px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-[#30363d]"
           title="Commit without running hooks"
           disabled={!repo || (!stagedCount && !amend) || !msg.trim()}
           onClick={() => {
@@ -75,7 +75,7 @@ export function CommitPanel() {
           Safe commit
         </button>
         <button
-          className={`rounded border px-3 py-1.5 text-xs transition-colors ${amend ? 'border-pilot-blue bg-sky-900/30 text-pilot-blue' : 'border-pilot-line bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+          className={`rounded border px-3 py-1.5 text-xs transition-colors ${amend ? 'border-pilot-blue bg-teal-900/40 text-pilot-blue' : 'border-pilot-line bg-[#21262d] text-slate-300 hover:bg-[#30363d]'}`}
           onClick={() => setAmend(a => !a)}
           title="Amend last commit"
         >

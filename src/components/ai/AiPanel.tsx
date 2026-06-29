@@ -22,7 +22,7 @@ export function AiPanel() {
         <span>Explain diff</span>
       </button>
       {aiText && (
-        <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded border border-pilot-line bg-slate-950/60 p-2 text-xs leading-relaxed text-slate-300">
+        <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded border border-pilot-line bg-[#0d1117]/60 p-2 text-xs leading-relaxed text-slate-300">
           {aiText}
         </pre>
       )}

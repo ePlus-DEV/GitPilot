@@ -139,7 +139,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex h-full w-full shrink-0 flex-col overflow-hidden border-r border-pilot-line bg-[#0a0f1e]">
+    <aside className="flex h-full w-full shrink-0 flex-col overflow-hidden border-r border-pilot-line bg-[#0d1117]">
       <div className="flex-1 overflow-auto py-2">
         <Section icon={<FolderGit2 size={13} />} title="Repositories">
           {recent.length === 0
@@ -327,7 +327,7 @@ function SidebarRow({
 }) {
   return (
     <div
-      className={`group flex cursor-default items-center gap-1.5 rounded-none px-3 py-1 hover:bg-slate-800/60 ${active ? 'bg-slate-800/80' : ''}`}
+      className={`group flex cursor-default items-center gap-1.5 rounded-none px-3 py-1 hover:bg-[#21262d]/60 ${active ? 'bg-[#21262d]/80' : ''}`}
       onContextMenu={onContextMenu}
     >
       {icon}
