@@ -2,6 +2,7 @@ use crate::{
     models::git::{CommitGraphRow, GitError, GraphRef},
     services::git_service,
 };
+use std::collections::{HashMap, HashSet};
 
 const NUM_COLORS: usize = 10;
 
@@ -15,6 +16,47 @@ struct RawCommit {
     refs: Vec<GraphRef>,
     message: String,
     is_head: bool,
+}
+
+/// All short names of remote tracking refs (e.g. "origin/main", "upstream/feature/xxx").
+fn get_remote_ref_names(repo_path: &str) -> HashSet<String> {
+    match git_service::git_text(
+        repo_path,
+        &["for-each-ref", "refs/remotes", "--format=%(refname:short)"],
+    ) {
+        Ok(out) => out
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect(),
+        Err(_) => HashSet::new(),
+    }
+}
+
+/// Map of local branch short name → upstream tracking ref short name.
+fn get_tracking_map(repo_path: &str) -> HashMap<String, String> {
+    match git_service::git_text(
+        repo_path,
+        &[
+            "for-each-ref",
+            "refs/heads",
+            "--format=%(refname:short)|%(upstream:short)",
+        ],
+    ) {
+        Ok(out) => out
+            .lines()
+            .filter_map(|line| {
+                let mut parts = line.splitn(2, '|');
+                let local = parts.next()?.trim().to_string();
+                let upstream = parts.next()?.trim().to_string();
+                if upstream.is_empty() {
+                    return None;
+                }
+                Some((local, upstream))
+            })
+            .collect(),
+        Err(_) => HashMap::new(),
+    }
 }
 
 /// Parse "%D" ref decoration string into structured GraphRef list.
@@ -36,11 +78,13 @@ fn parse_graph_refs(refs_str: &str) -> (Vec<GraphRef>, bool) {
                 name: branch.to_string(),
                 ref_type: "local".to_string(),
                 full_name: format!("refs/heads/{branch}"),
+                upstream: None,
             });
             refs.push(GraphRef {
                 name: "HEAD".to_string(),
                 ref_type: "head".to_string(),
                 full_name: "HEAD".to_string(),
+                upstream: None,
             });
         } else if part == "HEAD" {
             is_head = true;
@@ -50,18 +94,23 @@ fn parse_graph_refs(refs_str: &str) -> (Vec<GraphRef>, bool) {
                 name: tag.to_string(),
                 ref_type: "tag".to_string(),
                 full_name: format!("refs/tags/{tag}"),
+                upstream: None,
             });
         } else if part.contains('/') {
+            // Tentatively classify as remote; will be corrected by post-processing
+            // if it turns out to be a local branch with '/' in its name.
             refs.push(GraphRef {
                 name: part.to_string(),
                 ref_type: "remote".to_string(),
                 full_name: format!("refs/remotes/{part}"),
+                upstream: None,
             });
         } else {
             refs.push(GraphRef {
                 name: part.to_string(),
                 ref_type: "local".to_string(),
                 full_name: format!("refs/heads/{part}"),
+                upstream: None,
             });
         }
     }
@@ -272,7 +321,32 @@ pub fn get_commit_graph(
         return Ok(Vec::new());
     }
 
-    let raw = parse_log_output(&out);
+    let mut raw = parse_log_output(&out);
+
+    // Enrich refs: correct misclassified local branches (those containing '/' in their name)
+    // and annotate local branches with their tracking upstream ref.
+    let remote_names = get_remote_ref_names(&repo_path);
+    let tracking = get_tracking_map(&repo_path);
+
+    for commit in &mut raw {
+        for r in &mut commit.refs {
+            if r.ref_type == "remote" || r.ref_type == "local" {
+                if remote_names.contains(&r.name) {
+                    // Confirmed remote
+                    r.ref_type = "remote".to_string();
+                    r.full_name = format!("refs/remotes/{}", r.name);
+                } else if r.ref_type == "remote" {
+                    // Was guessed remote (contains '/') but not in actual remotes → local branch with '/' in name
+                    r.ref_type = "local".to_string();
+                    r.full_name = format!("refs/heads/{}", r.name);
+                }
+            }
+            if r.ref_type == "local" {
+                r.upstream = tracking.get(&r.name).cloned();
+            }
+        }
+    }
+
     Ok(compute_lanes(&raw))
 }
 

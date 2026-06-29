@@ -204,6 +204,8 @@ pub struct GraphRef {
     pub name: String,
     pub ref_type: String, // "local" | "remote" | "tag" | "head"
     pub full_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream: Option<String>, // Local branches only: tracking remote short name (e.g. "origin/feature/xxx")
 }
 
 /// Per-row data returned by get_commit_graph.

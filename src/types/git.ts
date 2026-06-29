@@ -28,7 +28,7 @@ export type ReflogEntry={selector:string;commit:string;subject:string};
 export type SubmoduleInfo={path:string;commit:string;branch?:string|null;status:string};
 export type BisectState={inProgress:boolean;current?:string|null;log:string[]};
 
-export type GraphRef={name:string;refType:string;fullName:string};
+export type GraphRef={name:string;refType:string;fullName:string;upstream?:string|null};
 export type CommitGraphRow={
   sha:string;shortSha:string;message:string;
   authorName:string;authorEmail:string;timestamp:number;

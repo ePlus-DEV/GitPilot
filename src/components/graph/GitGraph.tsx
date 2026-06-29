@@ -280,39 +280,60 @@ function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
     : LANE_COLORS[0];
   const [hover, setHover] = useState<BadgeHover | null>(null);
 
-  const allRefs = row.commit.refs;
-  if (allRefs.length === 0) return <div className="shrink-0" style={{ width: BRANCH_COL_W }} />;
+  // Use typed refs from graph data — avoids '/' ambiguity (local feature/xxx vs remote origin/xxx)
+  const graphRefs = row.graph?.refs ?? [];
+  const hasAnyRef = graphRefs.some(r => r.refType !== 'head');
+  if (!hasAnyRef) return <div className="shrink-0" style={{ width: BRANCH_COL_W }} />;
 
-  const isHead = allRefs.some(r => r.startsWith('HEAD ->') || r === 'HEAD');
+  const isHead = graphRefs.some(r => r.refType === 'head');
 
-  type Group = { name: string; local: boolean; remote: boolean };
-  const groupMap = new Map<string, Group>();
-  const tagList: string[] = [];
+  // Group: each local ref is paired with its tracking remote (if that remote is on this same commit).
+  // Remote-only refs (no local counterpart here) get their own badge.
+  type BadgeGroup = { name: string; displayName: string; local: boolean; remote: boolean };
+  const groups: BadgeGroup[] = [];
+  const usedRemoteNames = new Set<string>();
 
-  for (const ref of allRefs) {
-    if (ref === 'HEAD') continue;
-    const clean = cleanRef(ref);
-    if (!clean) continue;
-    if (ref.startsWith('tag:')) { tagList.push(clean); continue; }
-    const isRemote = clean.includes('/');
-    const base = isRemote ? clean.slice(clean.indexOf('/') + 1) : clean;
-    if (!base || base === 'HEAD') continue;
-    const g = groupMap.get(base);
-    if (g) { if (isRemote) g.remote = true; else g.local = true; }
-    else groupMap.set(base, { name: base, local: !isRemote, remote: isRemote });
+  for (const ref of graphRefs) {
+    if (ref.refType !== 'local') continue;
+    // Find tracking remote on this same commit: use upstream annotation first, then heuristic
+    const paired = graphRefs.find(r => {
+      if (r.refType !== 'remote') return false;
+      if (ref.upstream) return r.name === ref.upstream;
+      // Heuristic: remote.name = "<remoteName>/<localName>"
+      const slash = r.name.indexOf('/');
+      return slash >= 0 && r.name.slice(slash + 1) === ref.name;
+    });
+    if (paired) usedRemoteNames.add(paired.name);
+    groups.push({ name: ref.name, displayName: ref.name, local: true, remote: !!paired });
   }
 
-  const groups = Array.from(groupMap.values());
+  // Remote refs without a local counterpart on this commit
+  for (const ref of graphRefs) {
+    if (ref.refType !== 'remote') continue;
+    if (usedRemoteNames.has(ref.name)) continue;
+    if (ref.name.endsWith('/HEAD')) continue; // skip origin/HEAD noise
+    // Strip remote prefix for display (e.g. "origin/feature/xxx" → "feature/xxx")
+    const slash = ref.name.indexOf('/');
+    const displayName = slash >= 0 ? ref.name.slice(slash + 1) : ref.name;
+    groups.push({ name: ref.name, displayName, local: false, remote: true });
+  }
+
+  const tagList = graphRefs.filter(r => r.refType === 'tag').map(r => r.name);
+
   const showGroups = groups.slice(0, 2);
   const showTags = tagList.slice(0, Math.max(0, 2 - showGroups.length));
   const extra = (groups.length - showGroups.length) + (tagList.length - showTags.length);
-  const allNames = [...groups.map(g => g.name), ...tagList].join(', ');
+  const allNames = [...groups.map(g => g.displayName), ...tagList].join(', ');
   const totalBadges = showGroups.length + showTags.length;
   const badgeMaxW = totalBadges <= 1 ? 130 : 64;
 
   const badgeBg = selected ? `${laneColor}55` : `${laneColor}38`;
   const badgeText = selected ? '#ffffff' : laneColor;
   const badgeBorder = selected ? `1px solid ${laneColor}cc` : `1px solid ${laneColor}70`;
+  // Remote-only badges are visually dimmer
+  const remoteBg = selected ? `${laneColor}33` : `${laneColor}22`;
+  const remoteText = selected ? `${laneColor}cc` : `${laneColor}99`;
+  const remoteBorder = `1px solid ${laneColor}44`;
 
   const onEnter = (
     e: React.MouseEvent,
@@ -334,18 +355,24 @@ function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
         {isHead && (
           <span className="shrink-0 text-[11px] font-bold leading-none text-yellow-400">✓</span>
         )}
-        {showGroups.map(g => (
-          <span
-            key={g.name}
-            className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
-            style={{ maxWidth: badgeMaxW, background: badgeBg, color: badgeText, border: badgeBorder }}
-            onMouseEnter={e => onEnter(e, g.name, { local: g.local, remote: g.remote }, badgeBg, badgeText, badgeBorder)}
-          >
-            <span className="min-w-0 truncate">{g.name}</span>
-            {g.local && <Monitor size={10} className="shrink-0 opacity-80" />}
-            {g.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
-          </span>
-        ))}
+        {showGroups.map(g => {
+          const isRemoteOnly = !g.local && g.remote;
+          const bg = isRemoteOnly ? remoteBg : badgeBg;
+          const fg = isRemoteOnly ? remoteText : badgeText;
+          const bdr = isRemoteOnly ? remoteBorder : badgeBorder;
+          return (
+            <span
+              key={g.name}
+              className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
+              style={{ maxWidth: badgeMaxW, background: bg, color: fg, border: bdr }}
+              onMouseEnter={e => onEnter(e, g.name, { local: g.local, remote: g.remote }, bg, fg, bdr)}
+            >
+              <span className="min-w-0 truncate">{g.displayName}</span>
+              {g.local && <Monitor size={10} className="shrink-0 opacity-80" />}
+              {g.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
+            </span>
+          );
+        })}
         {showTags.map(tag => (
           <span
             key={tag}
