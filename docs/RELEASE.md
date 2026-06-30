@@ -4,9 +4,8 @@
 
 | Channel | Tag pattern | Example | Who gets it |
 |---------|-------------|---------|-------------|
-| **Stable** | `v*.*.*` | `v1.2.0` | All users on stable update channel |
-| **Alpha** | `v*.*.*-alpha.*` | `v1.2.0-alpha.1` | Users who opted into alpha channel |
-| **Beta** | `v*.*.*-beta.*` | `v1.2.0-beta.1` | Users who opted into alpha channel |
+| **Stable** | `v*.*.*` | `v1.2.0` | All users on stable channel |
+| **Beta** | `v*.*.*-beta.*` or `v*.*.*-alpha.*` or `v*.*.*-rc.*` | `v1.2.0-beta.1` | Users who opted into beta channel |
 
 ---
 
@@ -48,18 +47,18 @@ git tag v1.2.0
 git push origin v1.2.0
 ```
 
-### Alpha / Beta release
+### Beta / pre-release
 
 ```bash
 # package.json stays at base version e.g. "0.1.0"
-# Alpha/beta info goes in the tag only:
-git tag v0.1.0-alpha.1
-git push origin v0.1.0-alpha.1
+# Pre-release info goes in the tag only:
+git tag v0.1.0-beta.1
+git push origin v0.1.0-beta.1
 ```
 
-The release workflow strips the `-alpha.1` suffix before writing to `tauri.conf.json` so Windows MSI bundling works (MSI requires numeric-only pre-release identifiers).
+The release workflow strips the suffix before writing to `tauri.conf.json` so Windows MSI bundling works (MSI requires numeric-only pre-release identifiers).
 
-After the workflow completes, the `latest.json` updater manifest is automatically copied to the permanent `alpha-channel` release so in-app update checks for alpha users pick it up.
+After the workflow completes, `latest.json` is automatically copied to the permanent `beta-channel` release so in-app update checks for beta users pick it up.
 
 ---
 

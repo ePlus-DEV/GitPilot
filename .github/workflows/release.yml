@@ -95,23 +95,20 @@ jobs:
           args: ${{ matrix.args }}
           includeUpdaterJson: true
 
-      # For alpha releases: push latest.json to the permanent alpha-channel release
-      # so users on the alpha channel can receive update notifications.
-      - name: Publish to alpha-channel (alpha only, one runner)
+      # For pre-releases: push latest.json to beta-channel so beta users get update notifications.
+      - name: Publish to beta-channel (pre-release only, one runner)
         if: steps.meta.outputs.prerelease == 'true' && matrix.platform == 'ubuntu-22.04'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          # Download the just-published latest.json from this release
           gh release download ${{ github.ref_name }} --pattern latest.json --output /tmp/latest.json
 
-          # Create or update the alpha-channel release and overwrite its latest.json
-          if gh release view alpha-channel &>/dev/null; then
-            gh release upload alpha-channel /tmp/latest.json --clobber
+          if gh release view beta-channel &>/dev/null; then
+            gh release upload beta-channel /tmp/latest.json --clobber
           else
-            gh release create alpha-channel /tmp/latest.json \
-              --title "Alpha Channel (auto-updated)" \
-              --notes "This release is automatically updated to the latest alpha build. Do not install manually — use the in-app update system." \
+            gh release create beta-channel /tmp/latest.json \
+              --title "Beta Channel (auto-updated)" \
+              --notes "This release is automatically updated to the latest pre-release build. Do not install manually — use the in-app update system." \
               --prerelease
           fi

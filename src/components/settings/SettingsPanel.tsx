@@ -148,7 +148,7 @@ export function SettingsPanel() {
 
                 <FieldRow
                   label="Update Channel"
-                  hint="Stable: official releases only. Alpha: opt-in to early test builds."
+                  hint="Stable: official releases only. Beta: opt-in to pre-release builds."
                 >
                   <select
                     className="input h-9 w-full text-sm"
@@ -156,7 +156,7 @@ export function SettingsPanel() {
                     onChange={e => set('updateChannel', e.target.value)}
                   >
                     <option value="stable">Stable</option>
-                    <option value="alpha">Alpha (early access)</option>
+                    <option value="beta">Beta (pre-release)</option>
                   </select>
                 </FieldRow>
 

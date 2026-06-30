@@ -13,7 +13,7 @@ const MOCK_UPDATE = {
 
 const ENDPOINTS = {
   stable: 'https://github.com/ePlus-DEV/GitPilot/releases/latest/download/latest.json',
-  alpha: 'https://github.com/ePlus-DEV/GitPilot/releases/download/alpha-channel/latest.json',
+  beta: 'https://github.com/ePlus-DEV/GitPilot/releases/download/beta-channel/latest.json',
 };
 
 export function UpdateDialog({ onClose, testMode, channel = 'stable' }: { onClose: () => void; testMode?: boolean; channel?: string }) {
@@ -68,8 +68,8 @@ export function UpdateDialog({ onClose, testMode, channel = 'stable' }: { onClos
           <div className="flex items-center gap-2.5">
             <GitPilotIcon size={20} />
             <span className="text-sm font-semibold text-slate-200">Check for Update</span>
-            {channel === 'alpha' && (
-              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-400">Alpha</span>
+            {channel === 'beta' && (
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-400">Beta</span>
             )}
           </div>
           <button

@@ -55,8 +55,8 @@ export function App() {
       useGitStore.setState({ settings, recent: settings.recentRepositories });
       // Auto-check update after settings loaded (to respect channel)
       const channel = settings.updateChannel ?? 'stable';
-      const url = channel === 'alpha'
-        ? 'https://github.com/ePlus-DEV/GitPilot/releases/download/alpha-channel/latest.json'
+      const url = channel === 'beta'
+        ? 'https://github.com/ePlus-DEV/GitPilot/releases/download/beta-channel/latest.json'
         : 'https://github.com/ePlus-DEV/GitPilot/releases/latest/download/latest.json';
       import('@tauri-apps/plugin-updater').then(({ check }) =>
         // @ts-expect-error — url is supported at runtime but missing from installed type defs
