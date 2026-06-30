@@ -2,6 +2,9 @@
 
 A desktop Git GUI client built with Tauri v2 + Rust + React.
 
+<img width="1919" height="1029" alt="image" src="https://github.com/user-attachments/assets/2bffb8f2-a8be-4930-9af1-fc0fa4553ee9" />
+
+
 ## Features
 
 ### Repository management
