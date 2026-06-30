@@ -190,6 +190,11 @@ export function App() {
           <GitPilotIcon size={13} />
           <span className="text-slate-600">git</span><span className="font-bold text-slate-400">PILOT</span>
           <span className="mx-0.5 text-[#30363d]">·</span>v{appVersion}
+          {updateChannel !== 'stable' && (
+            <span className="rounded bg-amber-500/20 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-amber-400">
+              {updateChannel}
+            </span>
+          )}
         </button>
       )}
       <RepoTabs />
