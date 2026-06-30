@@ -59,7 +59,8 @@ export function App() {
         ? 'https://github.com/ePlus-DEV/GitPilot/releases/download/alpha-channel/latest.json'
         : 'https://github.com/ePlus-DEV/GitPilot/releases/latest/download/latest.json';
       import('@tauri-apps/plugin-updater').then(({ check }) =>
-        check({ url }).then(u => { if (!cancelled && u) setUpdateOpen(true); }).catch(() => {})
+        // @ts-expect-error — url is supported at runtime but missing from installed type defs
+        check({ url }).then((u: unknown) => { if (!cancelled && u) setUpdateOpen(true); }).catch(() => {})
       );
       const state = useGitStore.getState();
       if (!state.repo && settings.recentRepositories[0]) void state.openRepo(settings.recentRepositories[0]);

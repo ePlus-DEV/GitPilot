@@ -27,6 +27,7 @@ export function UpdateDialog({ onClose, testMode, channel = 'stable' }: { onClos
   useEffect(() => {
     if (testMode) return;
     const url = ENDPOINTS[channel as keyof typeof ENDPOINTS] ?? ENDPOINTS.stable;
+    // @ts-expect-error — url is supported at runtime but missing from installed type defs
     check({ url })
       .then(u => {
         if (u) { setUpdate(u); setStatus('available'); }
