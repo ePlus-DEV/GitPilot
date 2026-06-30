@@ -254,6 +254,7 @@ export const useGitStore = create<State>((set, get) => ({
   },
 
   run: async (label, fn, refreshMode = 'full') => {
+    set({ busy: true });
     try {
       const r = await fn();
       get().log(`${label}\n${fmt(r)}`);
@@ -261,6 +262,8 @@ export const useGitStore = create<State>((set, get) => ({
       else if (refreshMode === 'full') await get().refresh();
     } catch (e) {
       get().log(String((e as Error).message ?? e));
+    } finally {
+      set({ busy: false });
     }
   },
 
