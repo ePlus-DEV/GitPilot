@@ -27,6 +27,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect pre-release
+        id: meta
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [[ "$TAG" =~ -(alpha|beta|rc) ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync version into tauri.conf.json
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'src-tauri/tauri.conf.json';
+            const c = JSON.parse(fs.readFileSync(p, 'utf8'));
+            c.version = '${{ steps.meta.outputs.version }}';
+            fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');
+          "
+
       - name: Install dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -60,10 +84,31 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: GitPilot ${{ github.ref_name }}
+          releaseName: 'GitPilot ${{ github.ref_name }}'
           releaseBody: |
             See the assets below to download and install this version of GitPilot.
-          releaseDraft: true
-          prerelease: false
+          releaseDraft: false
+          prerelease: ${{ steps.meta.outputs.prerelease }}
           args: ${{ matrix.args }}
           includeUpdaterJson: true
+
+      # For alpha releases: push latest.json to the permanent alpha-channel release
+      # so users on the alpha channel can receive update notifications.
+      - name: Publish to alpha-channel (alpha only, one runner)
+        if: steps.meta.outputs.prerelease == 'true' && matrix.platform == 'ubuntu-22.04'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          # Download the just-published latest.json from this release
+          gh release download ${{ github.ref_name }} --pattern latest.json --output /tmp/latest.json
+
+          # Create or update the alpha-channel release and overwrite its latest.json
+          if gh release view alpha-channel &>/dev/null; then
+            gh release upload alpha-channel /tmp/latest.json --clobber
+          else
+            gh release create alpha-channel /tmp/latest.json \
+              --title "Alpha Channel (auto-updated)" \
+              --notes "This release is automatically updated to the latest alpha build. Do not install manually — use the in-app update system." \
+              --prerelease
+          fi

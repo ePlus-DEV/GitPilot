@@ -13,6 +13,8 @@ pub struct Settings {
     pub shortcuts: Vec<String>,
     #[serde(default)]
     pub auto_fetch_interval: u32,
+    #[serde(default)]
+    pub update_channel: String,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -26,6 +28,7 @@ impl Default for Settings {
             ai_model: "".into(),
             validation_commands: vec!["npm run lint".into(), "php artisan test".into()],
             auto_fetch_interval: 0,
+            update_channel: "stable".into(),
             shortcuts: vec![
                 "Ctrl/Cmd+O".into(),
                 "Ctrl/Cmd+S".into(),

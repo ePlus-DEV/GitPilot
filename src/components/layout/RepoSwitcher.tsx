@@ -20,6 +20,7 @@ export function RepoSwitcher() {
   const repo = useGitStore(s => s.repo);
   const recent = useGitStore(s => s.recent);
   const openRepo = useGitStore(s => s.openRepo);
+  const globalFetchInterval = useGitStore(s => s.settings?.autoFetchInterval ?? 0);
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [configPath, setConfigPath] = useState<string | null>(null);
@@ -149,17 +150,21 @@ export function RepoSwitcher() {
                       </div>
                       {showCfg && (
                         <div className="mx-2 mb-1.5 rounded border border-[#30363d] bg-[#0d1117] p-2">
-                          <div className="mb-1 text-[10px] font-semibold text-slate-400">Auto-fetch interval</div>
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <span className="text-[10px] font-semibold text-slate-400">Auto-fetch — repo override</span>
+                            {cfgVal === -1 && (
+                              <span className="text-[10px] text-slate-500">
+                                using global: {globalFetchInterval <= 0 ? 'disabled' : AUTO_FETCH_OPTIONS.find(o => o.value === globalFetchInterval)?.label ?? `${globalFetchInterval}s`}
+                              </span>
+                            )}
+                          </div>
                           <select
                             className="w-full rounded border border-[#30363d] bg-[#21262d] px-2 py-1 text-xs text-slate-200 outline-none focus:border-pilot-blue"
                             value={cfgVal}
                             onChange={e => {
                               const v = Number(e.target.value);
                               setRepoConfig(path, { autoFetchInterval: v === -1 ? undefined : v });
-                              if (isActive) {
-                                const globalInterval = useGitStore.getState().settings?.autoFetchInterval ?? 0;
-                                startAutoFetch(v === -1 ? globalInterval : v);
-                              }
+                              if (isActive) startAutoFetch(v === -1 ? globalFetchInterval : v);
                             }}
                           >
                             {AUTO_FETCH_OPTIONS.map(o => (

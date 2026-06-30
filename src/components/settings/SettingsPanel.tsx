@@ -146,6 +146,20 @@ export function SettingsPanel() {
                   </select>
                 </FieldRow>
 
+                <FieldRow
+                  label="Update Channel"
+                  hint="Stable: official releases only. Alpha: opt-in to early test builds."
+                >
+                  <select
+                    className="input h-9 w-full text-sm"
+                    value={settings.updateChannel ?? 'stable'}
+                    onChange={e => set('updateChannel', e.target.value)}
+                  >
+                    <option value="stable">Stable</option>
+                    <option value="alpha">Alpha (early access)</option>
+                  </select>
+                </FieldRow>
+
                 <SectionTitle>Defaults</SectionTitle>
                 <FieldRow
                   label="Default Target Branch"

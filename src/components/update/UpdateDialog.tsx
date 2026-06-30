@@ -11,7 +11,12 @@ const MOCK_UPDATE = {
   body: '- New feature: something awesome\n- Fix: critical bug\n- Improvement: performance boost',
 } as unknown as Update;
 
-export function UpdateDialog({ onClose, testMode }: { onClose: () => void; testMode?: boolean }) {
+const ENDPOINTS = {
+  stable: 'https://github.com/ePlus-DEV/GitPilot/releases/latest/download/latest.json',
+  alpha: 'https://github.com/ePlus-DEV/GitPilot/releases/download/alpha-channel/latest.json',
+};
+
+export function UpdateDialog({ onClose, testMode, channel = 'stable' }: { onClose: () => void; testMode?: boolean; channel?: string }) {
   const [status, setStatus] = useState<Status>(testMode ? 'available' : 'checking');
   const [update, setUpdate] = useState<Update | null>(testMode ? MOCK_UPDATE : null);
   const [progress, setProgress] = useState(0);
@@ -21,13 +26,14 @@ export function UpdateDialog({ onClose, testMode }: { onClose: () => void; testM
 
   useEffect(() => {
     if (testMode) return;
-    check()
+    const url = ENDPOINTS[channel as keyof typeof ENDPOINTS] ?? ENDPOINTS.stable;
+    check({ url })
       .then(u => {
         if (u) { setUpdate(u); setStatus('available'); }
         else setStatus('latest');
       })
       .catch(e => { setError(String(e)); setStatus('error'); });
-  }, [testMode]);
+  }, [testMode, channel]);
 
   const handleInstall = async () => {
     if (!update) return;
@@ -61,6 +67,9 @@ export function UpdateDialog({ onClose, testMode }: { onClose: () => void; testM
           <div className="flex items-center gap-2.5">
             <GitPilotIcon size={20} />
             <span className="text-sm font-semibold text-slate-200">Check for Update</span>
+            {channel === 'alpha' && (
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-400">Alpha</span>
+            )}
           </div>
           <button
             className="rounded p-1 text-slate-500 hover:bg-[#21262d] hover:text-slate-200"

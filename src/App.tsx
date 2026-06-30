@@ -40,6 +40,7 @@ export function App() {
   const [appVersion, setAppVersion] = useState('');
   const [updateOpen, setUpdateOpen] = useState(false);
   const [updateTestMode, setUpdateTestMode] = useState(false);
+  const updateChannel = useGitStore(s => s.settings?.updateChannel ?? 'stable');
   const rightPanelTab = useGitStore(s => s.rightPanelTab);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [rightWidth, setRightWidth] = useState(430);
@@ -49,14 +50,17 @@ export function App() {
     let cancelled = false;
     getVersion().then(v => { if (!cancelled) setAppVersion(v); });
 
-    // Auto-check update on startup — only show dialog if update available
-    import('@tauri-apps/plugin-updater').then(({ check }) =>
-      check().then(u => { if (!cancelled && u) setUpdateOpen(true); }).catch(() => {})
-    );
-
     void gitService.getSettings().then(settings => {
       if (cancelled) return;
       useGitStore.setState({ settings, recent: settings.recentRepositories });
+      // Auto-check update after settings loaded (to respect channel)
+      const channel = settings.updateChannel ?? 'stable';
+      const url = channel === 'alpha'
+        ? 'https://github.com/ePlus-DEV/GitPilot/releases/download/alpha-channel/latest.json'
+        : 'https://github.com/ePlus-DEV/GitPilot/releases/latest/download/latest.json';
+      import('@tauri-apps/plugin-updater').then(({ check }) =>
+        check({ url }).then(u => { if (!cancelled && u) setUpdateOpen(true); }).catch(() => {})
+      );
       const state = useGitStore.getState();
       if (!state.repo && settings.recentRepositories[0]) void state.openRepo(settings.recentRepositories[0]);
     });
@@ -175,7 +179,7 @@ export function App() {
       <DialogHost />
       {settingsOpen && <SettingsPanel />}
       {repoMgmtOpen && <RepoManagementPanel />}
-      {updateOpen && <UpdateDialog onClose={() => { setUpdateOpen(false); setUpdateTestMode(false); }} testMode={updateTestMode} />}
+      {updateOpen && <UpdateDialog onClose={() => { setUpdateOpen(false); setUpdateTestMode(false); }} testMode={updateTestMode} channel={updateChannel} />}
       {appVersion && (
         <button
           className="fixed bottom-2 right-3 z-40 flex items-center gap-1.5 rounded border border-[#30363d] bg-[#161b22] px-2 py-0.5 text-[10px] font-mono text-slate-500 transition-colors hover:border-pilot-blue/40 hover:text-slate-300"
