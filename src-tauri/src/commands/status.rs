@@ -35,7 +35,7 @@ pub fn get_status(repo_path: String) -> Result<GitStatus, GitError> {
     let mut s = GitStatus::default();
     for l in out.stdout.lines() {
         if let Some(rest) = l.strip_prefix("## ") {
-            s.current_branch = rest.split('.').next().unwrap_or(rest).trim().to_string();
+            s.current_branch = rest.split("...").next().unwrap_or(rest).trim().to_string();
             s.ahead = rest
                 .split("ahead ")
                 .nth(1)

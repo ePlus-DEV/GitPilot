@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod branch;
+pub mod graph;
 pub mod commit;
 pub mod diff;
 pub mod history;
@@ -14,5 +15,6 @@ pub mod staging;
 pub mod stash;
 pub mod status;
 pub mod tag;
+pub mod system;
 pub mod validation;
 pub mod worktree;

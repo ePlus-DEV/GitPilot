@@ -95,11 +95,14 @@ pub struct CommitInfo {
     pub short_hash: String,
     pub parents: Vec<String>,
     pub author: String,
+    pub author_email: String,
     pub date: String,
     pub message: String,
     pub refs: Vec<String>,
     pub head: bool,
     pub graph: String,
+    pub insertions: u32,
+    pub deletions: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,4 +197,38 @@ pub struct BisectState {
     pub in_progress: bool,
     pub current: Option<String>,
     pub log: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphRef {
+    pub name: String,
+    pub ref_type: String, // "local" | "remote" | "tag" | "head"
+    pub full_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream: Option<String>, // Local branches only: tracking remote short name (e.g. "origin/feature/xxx")
+}
+
+/// Per-row data returned by get_commit_graph.
+/// top_lines / bottom_lines: [column, color_index] pairs for straight lane lines.
+/// edges: [from_col, to_col, color_index] triples for bezier curves (merge/fork).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitGraphRow {
+    pub sha: String,
+    pub short_sha: String,
+    pub message: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub timestamp: i64,
+    pub parents: Vec<String>,
+    pub refs: Vec<GraphRef>,
+    pub lane: usize,
+    pub color_index: usize,
+    pub is_merge: bool,
+    pub is_head: bool,
+    pub top_lines: Vec<[usize; 2]>,
+    pub bottom_lines: Vec<[usize; 2]>,
+    pub edges: Vec<[usize; 3]>,
+    pub num_cols: usize,
 }

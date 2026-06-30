@@ -7,14 +7,15 @@ export type RepositoryInfo={name:string;path:string;currentBranch:string};
 export type DiffResult={filePath:string;oldText:string;newText:string;patch:string;binary:boolean;cached:boolean};
 export type BranchInfo={name:string;current:boolean;remote:boolean;upstream?:string|null;ahead:number;behind:number};
 export type RemoteInfo={name:string;fetchUrl:string;pushUrl:string};
-export type CommitInfo={hash:string;shortHash:string;parents:string[];author:string;date:string;message:string;refs:string[];head:boolean;graph:string};
+export type CommitInfo={hash:string;shortHash:string;parents:string[];author:string;authorEmail:string;date:string;message:string;refs:string[];head:boolean;graph:string;insertions:number;deletions:number};
 export type HistoryFilters={branch?:string;author?:string;since?:string;until?:string;keyword?:string;filePath?:string};
 export type CommitFile={path:string;status:string};
 export type StashInfo={index:number;name:string;branch:string;message:string};
 export type TagInfo={name:string;target:string;message:string};
 export type ConflictBlock={id:number;startLine:number;separatorLine:number;endLine:number;current:string;incoming:string};
 export type ParsedConflictFile={path:string;content:string;blocks:ConflictBlock[];hasMarkers:boolean};
-export type Settings={theme:string;gitPath:string;defaultTargetBranch:string;recentRepositories:string[];aiProvider:string;aiApiKey:string;aiModel:string;validationCommands:string[];shortcuts:string[]};
+export type ConflictFileData={path:string;ancestorContent:string|null;oursContent:string|null;theirsContent:string|null;workingContent:string;isBinary:boolean;lineEnding:string};
+export type Settings={theme:string;gitPath:string;defaultTargetBranch:string;recentRepositories:string[];aiProvider:string;aiApiKey:string;aiModel:string;validationCommands:string[];shortcuts:string[];autoFetchInterval:number;updateChannel:string};
 export type AiResponse={text:string;requiresReview:boolean};
 
 export type RebaseTodoItem={action:string;hash:string;message:string};
@@ -26,3 +27,16 @@ export type SearchResult={kind:string;title:string;subtitle:string;target:string
 export type ReflogEntry={selector:string;commit:string;subject:string};
 export type SubmoduleInfo={path:string;commit:string;branch?:string|null;status:string};
 export type BisectState={inProgress:boolean;current?:string|null;log:string[]};
+
+export type GraphRef={name:string;refType:string;fullName:string;upstream?:string|null};
+export type CommitGraphRow={
+  sha:string;shortSha:string;message:string;
+  authorName:string;authorEmail:string;timestamp:number;
+  parents:string[];refs:GraphRef[];
+  lane:number;colorIndex:number;
+  isMerge:boolean;isHead:boolean;
+  topLines:[number,number][];     // [column, colorIndex]
+  bottomLines:[number,number][];  // [column, colorIndex]
+  edges:[number,number,number][]; // [fromCol, toCol, colorIndex]
+  numCols:number;
+};

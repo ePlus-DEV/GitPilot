@@ -1,101 +1,180 @@
-import { open } from '@tauri-apps/plugin-dialog';
-import { FolderOpen, RefreshCw, Download, Upload, ArrowDownToLine, Settings, GitBranch, Loader2 } from 'lucide-react';
+import { type ReactNode } from 'react';
+import { Archive, ArchiveRestore, ArrowDownToLine, GitBranch, GitMerge, Loader2, Redo2, RefreshCw, Search, Settings, Terminal, Undo2, Upload } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
+import { GitPilotIcon } from '../common/GitPilotIcon';
+import { RepoSwitcher } from './RepoSwitcher';
+import { BranchSwitcher } from './BranchSwitcher';
+import { invoke } from '@tauri-apps/api/core';
+import { gpPrompt, gpConfirm, gpAlert } from '../common/Dialog';
 
 export function TopBar() {
-  const { repo, status, busy, openRepo, refresh, run } = useGitStore();
-  const pick = async () => {
-    const p = await open({ directory: true, multiple: false });
-    if (p && !Array.isArray(p)) void openRepo(p);
-  };
-  const branch = status.currentBranch || repo?.currentBranch || 'no branch';
+  const repo = useGitStore(s => s.repo);
+  const busy = useGitStore(s => s.busy);
+  const refreshing = useGitStore(s => s.refreshing);
+  const runningOp = useGitStore(s => s.runningOp);
+  const undoStack = useGitStore(s => s.undoStack);
+  const redoStack = useGitStore(s => s.redoStack);
+  const performUndo = useGitStore(s => s.performUndo);
+  const performRedo = useGitStore(s => s.performRedo);
+  const op = (label: string) => runningOp === label;
+  const run = useGitStore(s => s.run);
+  const branches = useGitStore(s => s.branches);
+  const stashes = useGitStore(s => s.stashes);
+  const status = useGitStore(s => s.status);
   const ahead = status.ahead ?? 0;
   const behind = status.behind ?? 0;
 
+  const mergeBranch = async () => {
+    if (!repo) return;
+    const candidate = branches.find(b => !b.current)?.name ?? '';
+    const branch = status.currentBranch || repo.currentBranch || '';
+    const branchName = await gpPrompt('Merge branch into current branch', candidate);
+    if (!branchName) return;
+    if (await gpConfirm(`Merge ${branchName} into ${branch}?`)) {
+      void run('merge branch', () => gitService.mergeBranch(repo.path, branchName));
+    }
+  };
+
+  const createBranch = async () => {
+    if (!repo) return;
+    const name = await gpPrompt('New branch name');
+    if (!name) return;
+    void run('create branch', () => gitService.createBranch(repo.path, name, true), 'full', {
+      undo: () => gitService.deleteBranch(repo.path, name, false),
+      redo: () => gitService.createBranch(repo.path, name, true),
+    });
+  };
+
+  const createStash = async () => {
+    if (!repo) return;
+    const msg = (await gpPrompt('Stash message (optional)', '')) ?? '';
+    const stashMsg = msg || 'GitPilot stash';
+    void run('stash', () => gitService.createStash(repo.path, stashMsg), 'full', {
+      undo: () => gitService.popStash(repo.path, 'stash@{0}'),
+      redo: () => gitService.createStash(repo.path, stashMsg),
+    });
+  };
+
+  const popStash = async () => {
+    if (!repo) return;
+    const top = stashes[0];
+    if (!top) { await gpAlert('No stashes to pop.'); return; }
+    void run('pop stash', () => gitService.popStash(repo.path, top.name));
+  };
+
+  const openTerminal = () => {
+    if (repo) void invoke('open_in_terminal', { path: repo.path });
+  };
+
+  const p = repo?.path;
+
   return (
-    <div className="h-12 flex items-center gap-2 border-b border-pilot-line bg-[#0d1324] px-3 shrink-0">
-      {/* Logo / app name */}
-      <div className="flex items-center gap-1.5 pr-3 border-r border-pilot-line">
-        <GitBranch size={16} className="text-pilot-blue" />
-        <span className="text-sm font-bold text-slate-100">GitPilot</span>
+    <header className="flex h-11 shrink-0 items-center border-b border-pilot-line bg-[#161b22] px-2">
+      {/* Logo */}
+      <div className="flex shrink-0 items-center gap-1.5 border-r border-pilot-line pr-3 mr-1.5">
+        <GitPilotIcon size={22} />
+        <span className="text-xs leading-none tracking-wide">
+          <span className="font-light text-slate-500">git</span>
+          <span className="font-bold text-slate-100">PILOT</span>
+        </span>
       </div>
 
-      {/* Open repo */}
-      <button onClick={pick} className="icon-btn" title="Open Repository">
-        <FolderOpen size={15} />
-        <span className="text-xs">Open</span>
-      </button>
+      {/* Repo + Branch — shrink-0, natural width */}
+      <RepoSwitcher />
+      {repo && <BranchSwitcher />}
 
-      {/* Repo info */}
+      {/* Divider */}
+      <div className="mx-2 h-6 w-px shrink-0 bg-[#30363d]" />
+
+      {/* Action buttons */}
       {repo && (
-        <div className="min-w-0 flex-1 px-2">
-          <div className="truncate text-sm font-semibold">{repo.name}</div>
-          <div className="truncate text-[10px] text-slate-500">{repo.path}</div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {/* Undo / Redo / Refresh */}
+          <Btn icon={<Undo2 size={15} />} label="Undo" loading={op(`undo: ${undoStack[0]?.label ?? ''}`)} disabled={busy || undoStack.length === 0} title={undoStack[0] ? `Undo ${undoStack[0].label}` : 'Nothing to undo'} onClick={() => void performUndo()} />
+          <Btn icon={<Redo2 size={15} />} label="Redo" loading={op(`redo: ${redoStack[0]?.label ?? ''}`)} disabled={busy || redoStack.length === 0} title={redoStack[0] ? `Redo ${redoStack[0].label}` : 'Nothing to redo'} onClick={() => void performRedo()} />
+          <Btn icon={<RefreshCw size={15} />} label="Refresh" loading={refreshing} disabled={busy} title="Refresh" onClick={() => void useGitStore.getState().refresh()} />
+
+          <Sep />
+
+          {/* Pull / Push */}
+          <Btn icon={<ArrowDownToLine size={15} />} label="Pull" badge={behind || undefined} loading={op('pull')} disabled={busy} title={`Pull${behind ? ` (${behind} behind)` : ''}`} onClick={() => p && run('pull', () => gitService.pull(p))} />
+          <Btn icon={<Upload size={15} />} label="Push" badge={ahead || undefined} loading={op('push')} disabled={busy} title={`Push${ahead ? ` (${ahead} ahead)` : ''}`} accent onClick={() => p && run('push', () => gitService.push(p))} />
+
+          <Sep />
+
+          {/* Branch / Merge / Stash / Pop */}
+          <Btn icon={<GitBranch size={15} />} label="Branch" loading={op('create branch')} disabled={busy} title="Create new branch" onClick={createBranch} />
+          <Btn icon={<GitMerge size={15} />} label="Merge" loading={op('merge branch')} disabled={busy} title="Merge branch into current" onClick={mergeBranch} />
+
+          <Sep />
+
+          <Btn icon={<Archive size={15} />} label="Stash" loading={op('stash')} disabled={busy} title="Stash working changes" onClick={createStash} />
+          <Btn icon={<ArchiveRestore size={15} />} label="Pop" loading={op('pop stash')} disabled={busy || stashes.length === 0} title="Pop top stash" onClick={popStash} />
+
+          <Sep />
+
+          {/* Terminal */}
+          <Btn icon={<Terminal size={15} />} label="Terminal" disabled={!repo} title="Open in terminal" onClick={openTerminal} />
         </div>
       )}
 
       <div className="flex-1" />
 
-      {/* Branch badge */}
-      <div className="flex items-center gap-1.5 rounded bg-slate-800 border border-pilot-line px-2.5 py-1">
-        <GitBranch size={12} className="text-pilot-blue shrink-0" />
-        <span className="text-xs font-medium truncate max-w-[140px]">{branch}</span>
-        {behind > 0 && <span className="text-[10px] text-amber-400">↓{behind}</span>}
-        {ahead > 0 && <span className="text-[10px] text-emerald-400">↑{ahead}</span>}
+      {/* Right: Search + Settings */}
+      <div className="flex shrink-0 items-center gap-0.5">
+        {repo && (
+          <Btn
+            icon={<Search size={15} />}
+            label="Search"
+            title="Smart search (commits, files, authors)"
+            onClick={async () => {
+              const q = await gpPrompt('Search commits, files, authors…');
+              if (q && repo) void gitService.smartSearch(repo.path, q).then(r => useGitStore.getState().log(`Search "${q}": ${r.length} result(s)`));
+            }}
+          />
+        )}
+        <Btn icon={<Settings size={15} />} label="Settings" title="Settings" onClick={() => useGitStore.setState({ settingsOpen: true, settingsTab: 'general' })} />
       </div>
-
-      {/* Action buttons */}
-      <div className="flex items-center gap-1 ml-2">
-        <button
-          className="icon-btn"
-          title="Fetch"
-          onClick={() => repo && run('fetch', () => gitService.fetch(repo.path))}
-          disabled={busy || !repo}
-        >
-          <Download size={14} />
-          <span className="text-xs">Fetch</span>
-        </button>
-        <button
-          className="icon-btn"
-          title="Pull"
-          onClick={() => repo && run('pull', () => gitService.pull(repo.path))}
-          disabled={busy || !repo}
-        >
-          <ArrowDownToLine size={14} />
-          <span className="text-xs">Pull</span>
-        </button>
-        <button
-          className="icon-btn accent"
-          title="Push"
-          onClick={() => repo && run('push', () => gitService.push(repo.path))}
-          disabled={busy || !repo}
-        >
-          <Upload size={14} />
-          <span className="text-xs">Push</span>
-        </button>
-
-        <div className="w-px h-5 bg-pilot-line mx-1" />
-
-        <button
-          className="icon-btn"
-          title="Refresh (Ctrl+R)"
-          onClick={() => void refresh()}
-          disabled={busy}
-        >
-          {busy
-            ? <Loader2 size={14} className="animate-spin" />
-            : <RefreshCw size={14} />
-          }
-        </button>
-        <button
-          className="icon-btn"
-          title="Settings"
-          onClick={() => useGitStore.setState({ settingsOpen: true } as never)}
-        >
-          <Settings size={14} />
-        </button>
-      </div>
-    </div>
+    </header>
   );
+}
+
+// ── Toolbar button ────────────────────────────────────────────────────────────
+
+function Btn({ icon, label, title, onClick, disabled, accent, badge, loading }: {
+  icon: ReactNode;
+  label: string;
+  title?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  accent?: boolean;
+  badge?: number;
+  loading?: boolean;
+}) {
+  return (
+    <button
+      className={`relative flex flex-col items-center justify-center gap-[2px] rounded px-2.5 py-1 transition-colors disabled:opacity-40
+        ${accent
+          ? 'text-pilot-blue hover:bg-teal-900/40 hover:text-teal-300'
+          : 'text-slate-400 hover:bg-[#21262d] hover:text-slate-100'}`}
+      title={title ?? label}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      {loading ? <Loader2 size={15} className="animate-spin text-pilot-blue" /> : icon}
+      <span className="flex items-center gap-1 text-[9px] font-medium leading-none tracking-wide">
+        {label}
+        {badge !== undefined && badge > 0 && (
+          <span className="rounded-full bg-pilot-blue px-1 py-px text-[8px] font-bold leading-none text-slate-950">
+            {badge}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+function Sep() {
+  return <div className="mx-1 h-6 w-px shrink-0 bg-[#30363d]" />;
 }

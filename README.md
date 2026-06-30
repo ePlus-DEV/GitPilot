@@ -1,49 +1,79 @@
 # GitPilot
 
-GitPilot is a desktop Git GUI client built with Tauri v2, Rust, React, TypeScript, Tailwind CSS, Zustand, and Monaco Editor.
+A desktop Git GUI client built with Tauri v2 + Rust + React.
+
+<img width="1919" height="1029" alt="image" src="https://github.com/user-attachments/assets/2bffb8f2-a8be-4930-9af1-fc0fa4553ee9" />
+
 
 ## Features
 
-- Repository management with validation, current branch display, and recent repositories.
-- Git status from `git status --porcelain=v1 -b` grouped as staged, unstaged, untracked, and conflicted.
-- Stage, unstage, discard, delete untracked files, stage all, and unstage all.
-- Monaco side-by-side and inline diff viewer with binary-file handling.
-- Commit staged files, amend last commit, and generate command output.
-- Branch, remote, history, graph, merge, rebase, stash, tag, validation, AI assistant, settings, and keyboard shortcut support.
-- 3-pane merge conflict resolver with conflict marker parsing and save + git add workflow.
+### Repository management
 
-## Install
+- Recent-repository list with quick switching
+- Per-repo auto-fetch interval override (Sidebar › Repositories › ⚙)
+- Open, clone, or init repositories from the top bar or native menu
+- Tab-based multi-repo interface
 
-```bash
-npm install
-```
+### History & commit graph
 
-## Run development app
+- Virtualized commit graph with branch lanes, bezier merge curves, and HEAD indicator
+- Filter by branch, author, date range, file path, or free-text search
+- Dim/hide merge commits toggle; load-more pagination
+- Commit details: author `name <email>`, date, SHA, parents — click any field to copy
+- Right-click commit: checkout, cherry-pick, rebase, reset (soft/mixed/hard), revert, create branch/tag/worktree, copy SHA, create patch
 
-```bash
-npm run tauri dev
-```
+### Branch management
 
-## Build desktop app
+- Branch switcher with right-click context menu: Pull, Push, Rename, Delete, Copy, Create tag
+- Sidebar branch list with full context menu: Checkout, Merge, Rebase, Reset, Push, Pull, Fetch, Delete, Rename
+- Correct display of branch names containing dots (e.g. `feature/v1.2.0`)
 
-```bash
-npm run tauri build
-```
+### Working directory & commits
 
-## Architecture
+- Stage, unstage, discard, delete untracked; stage all / unstage all
+- Monaco side-by-side and inline diff viewer with binary-file handling
+- Commit with message, amend last commit
+- Commit is undoable — Undo runs `git reset HEAD~1 --soft`; Redo re-commits
 
-Rust commands live in `src-tauri/src/commands`, shared services in `src-tauri/src/services`, and serialized models in `src-tauri/src/models`. The backend uses native Git CLI through `std::process::Command` with argument arrays; shell strings are not used for Git operations.
+### Undo / Redo
 
-React UI lives in `src/components`, state in `src/store/gitStore.ts`, IPC services in `src/services/gitService.ts`, and shared TypeScript types in `src/types/git.ts`.
+- Dedicated Undo and Redo buttons in the top bar (separate from Refresh)
+- 20-entry undo/redo history
 
-## GitPilot feature coverage
+### Conflict resolution & rebase
 
-GitPilot now includes first-pass production workflows for the highest-priority Git operations:
+- 3-pane merge conflict resolver (current / incoming / result) with accept-current, accept-incoming, accept-both, and manual edit
+- Rebase: start, continue, abort, skip; interactive todo editor for pick, reword, edit, squash, fixup, drop, reorder
+- Cherry-pick: apply commit, abort in-progress cherry-pick
 
-- Visual conflict resolution parses conflict markers, presents current/incoming/result panes, supports accept-current, accept-incoming, accept-both, manual edits, and stages files after all markers are removed.
-- Rebase tooling supports normal rebase, paused-state detection, continue, abort, skip, and an interactive todo editor for pick, reword, edit, squash, fixup, drop, and reorder operations.
-- Cherry-pick commands support applying a selected commit and aborting an in-progress cherry-pick so conflicts can route through the same resolver.
-- Stash management supports list, push, apply, pop, drop, and rename from the stash panel.
-- Productivity primitives are available for blame, fuzzy smart search, and worktree list/create/remove commands.
+### Stash, tags, worktrees
 
-Some larger roadmap items, such as provider-backed pull-request review, CI aggregation, enterprise telemetry, and release signing, are intentionally exposed as modular command/service seams for follow-up hardening rather than hard-coded into the UI.
+- Stash: list, push, pop, apply, drop
+- Tags: list, create lightweight and annotated, delete
+- Worktrees: list, create from branch or commit, remove
+
+### AI assistant
+
+- Configurable provider (Ollama, OpenAI, Anthropic, Groq), API key, and model
+- Generate commit message from staged diff; explain diff in natural language
+
+### Auto-updates
+
+- **Stable channel**: official releases only
+- **Alpha channel**: opt-in in Settings › General › Update Channel for early test builds
+- In-app update dialog with download progress and one-click install + relaunch
+
+### Settings
+
+- General: global auto-fetch interval, update channel
+- Git: custom git binary path
+- AI: provider, API key, model, default target branch
+- About: version info
+
+## Download
+
+See [Releases](https://github.com/ePlus-DEV/GitPilot/releases) for the latest build.
+
+## License
+
+[MIT](LICENSE)

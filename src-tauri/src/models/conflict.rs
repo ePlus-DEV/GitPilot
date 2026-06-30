@@ -1,6 +1,17 @@
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ConflictFileData {
+    pub path: String,
+    pub ancestor_content: Option<String>,
+    pub ours_content: Option<String>,
+    pub theirs_content: Option<String>,
+    pub working_content: String,
+    pub is_binary: bool,
+    pub line_ending: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConflictBlock {
     pub id: usize,
     pub start_line: usize,

@@ -111,23 +111,29 @@ jobs:
                 per_page: 100,
               });
               const artifactByName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
+              const fmtSize = (bytes) => `${(bytes / 1_048_576).toFixed(1)} MB`;
+              const fmtDate = (iso) => {
+                const d = new Date(iso);
+                return d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+              };
               const artifactLines = artifactNames.map((name) => {
                 const artifact = artifactByName.get(name);
                 const label = name.replace('gitpilot-', '');
                 if (!artifact) {
-                  return `- ${label}: \`${name}\` (open [workflow run](${runUrl}) to download)`;
+                  return `- **${label}**: \`${name}\` — (open [workflow run](${runUrl}) to download)`;
                 }
                 const artifactUrl = `${runUrl}/artifacts/${artifact.id}`;
-                return `- ${label}: [\`${name}\`](${artifactUrl})`;
+                const size = fmtSize(artifact.size_in_bytes);
+                const updated = fmtDate(artifact.updated_at);
+                return `- **${label}**: [\`${name}\`](${artifactUrl}) — ${size} · updated ${updated}`;
               });
 
+              const now = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
               const body = [
                 marker,
                 '### GitPilot build artifacts are ready',
                 '',
-                `One CI workflow run built all 3 desktop apps: [open workflow run](${runUrl}).`,
-                '',
-                'Download links:',
+                `Built all 3 desktop apps — [workflow run](${runUrl}) · _last updated ${now}_`,
                 '',
                 ...artifactLines,
               ].join('\n');

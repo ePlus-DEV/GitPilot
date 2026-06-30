@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "GitPilot",
-  "version": "0.1.0",
   "identifier": "dev.gitpilot.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -33,5 +32,13 @@
       "icons/icon.png",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBOUNCMDg4QzJFMkQ2MDYKUldRRzF1TENpTENjeXB5WGtQSHZRc3ViU0RlQVZ5RzcxZHlPM1YwSWd4QzI1Rmk5eVptdWFIU1cK",
+      "endpoints": [
+        "https://github.com/ePlus-DEV/GitPilot/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

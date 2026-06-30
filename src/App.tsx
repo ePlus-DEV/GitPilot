@@ -1,4 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { getVersion } from '@tauri-apps/api/app';
+import { open } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import { useGitStore } from './store/gitStore';
 import { TopBar } from './components/layout/TopBar';
 import { Sidebar } from './components/layout/Sidebar';
@@ -9,61 +14,266 @@ import { ConsolePanel } from './components/console/ConsolePanel';
 import { CommitDetails } from './components/history/CommitDetails';
 import { MergeResolver } from './components/merge/MergeResolver';
 import { GitGraph } from './components/graph/GitGraph';
+import { MergeConflictPanel } from './components/merge-conflict/MergeConflictPanel';
 import { AiPanel } from './components/ai/AiPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
+import { WelcomeScreen } from './components/welcome/WelcomeScreen';
+import { RepoTabs } from './components/layout/RepoTabs';
+import { RepoManagementPanel } from './components/layout/RepoManagementPanel';
+import { NewTabPanel } from './components/layout/NewTabPanel';
+import { GitPilotIcon } from './components/common/GitPilotIcon';
+import { UpdateDialog } from './components/update/UpdateDialog';
 import { gitService } from './services/gitService';
+import { DialogHost, gpPrompt } from './components/common/Dialog';
 
 export function App() {
-  const s = useGitStore();
+  const repo = useGitStore(s => s.repo);
+  const selectedCommit = useGitStore(s => s.selectedCommit);
+  const conflict = useGitStore(s => s.conflict);
+  const diff = useGitStore(s => s.diff);
+  const status = useGitStore(s => s.status);
+  const showMergePanel = status.conflicted.length > 0 || status.mergeState.isMerging || status.mergeState.isRebasing;
+  const aiText = useGitStore(s => s.aiText);
+  const settingsOpen = useGitStore(s => s.settingsOpen);
+  const repoMgmtOpen = useGitStore(s => s.repoMgmtOpen);
+  const newTabOpen = useGitStore(s => s.newTabOpen);
+  const [appVersion, setAppVersion] = useState('');
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updateTestMode, setUpdateTestMode] = useState(false);
+  const updateChannel = useGitStore(s => s.settings?.updateChannel ?? 'stable');
+  const rightPanelTab = useGitStore(s => s.rightPanelTab);
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [rightWidth, setRightWidth] = useState(430);
+  const [consoleHeight, setConsoleHeight] = useState(144);
 
   useEffect(() => {
+    let cancelled = false;
+    getVersion().then(v => { if (!cancelled) setAppVersion(v); });
+
     void gitService.getSettings().then(settings => {
+      if (cancelled) return;
       useGitStore.setState({ settings, recent: settings.recentRepositories });
-      if (!('__TAURI_INTERNALS__' in window) && settings.recentRepositories[0]) void useGitStore.getState().openRepo(settings.recentRepositories[0]);
+      // Auto-check update after settings loaded (to respect channel)
+      const channel = settings.updateChannel ?? 'stable';
+      const url = channel === 'beta'
+        ? 'https://github.com/ePlus-DEV/GitPilot/releases/download/beta-channel/latest.json'
+        : 'https://github.com/ePlus-DEV/GitPilot/releases/latest/download/latest.json';
+      import('@tauri-apps/plugin-updater').then(({ check }) =>
+        // @ts-expect-error — url is supported at runtime but missing from installed type defs
+        check({ url }).then((u: unknown) => { if (!cancelled && u) setUpdateOpen(true); }).catch(() => {})
+      );
+      const state = useGitStore.getState();
+      if (!state.repo && settings.recentRepositories[0]) void state.openRepo(settings.recentRepositories[0]);
     });
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key.toLowerCase() === 'r') { e.preventDefault(); void s.refresh(); }
+      const state = useGitStore.getState();
+      if (mod && e.key.toLowerCase() === 'r') { e.preventDefault(); void state.refresh(); }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'u') { e.preventDefault(); setUpdateTestMode(true); setUpdateOpen(true); }
       if (mod && e.key === 'Enter') document.dispatchEvent(new CustomEvent('gitpilot-commit'));
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'p' && s.repo)
-        void s.run('push', () => gitService.push(s.repo!.path));
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'p' && state.repo)
+        void state.run('push', () => gitService.push(state.repo!.path));
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [s]);
+
+    // Native menu event handlers
+    const unlistens: (() => void)[] = [];
+    const on = (event: string, handler: () => void) => {
+      listen(event, handler).then(u => unlistens.push(u));
+    };
+
+    on('menu://open_repo', () => {
+      open({ directory: true, multiple: false }).then(p => {
+        if (p && !Array.isArray(p)) void useGitStore.getState().openRepo(p);
+      });
+    });
+
+    on('menu://clone_repo', () => {
+      void gpPrompt('Clone URL:').then(url => {
+        if (!url) return;
+        open({ directory: true, multiple: false, title: 'Clone into folder' }).then(async parent => {
+          if (!parent || Array.isArray(parent)) return;
+          const state = useGitStore.getState();
+          const folder = url.split('/').pop()?.replace(/\.git$/, '') ?? 'repo';
+          void state.run('clone', () =>
+            gitService.cloneRepository(url, `${parent}/${folder}`).then(async r => {
+              await gitService.saveRecentRepository(r.path);
+              await state.openRepo(r.path);
+              return r;
+            })
+          );
+        });
+      });
+    });
+
+    on('menu://init_repo', () => {
+      open({ directory: true, multiple: false, title: 'Init repo in folder' }).then(async p => {
+        if (!p || Array.isArray(p)) return;
+        const state = useGitStore.getState();
+        void state.run('init', () =>
+          gitService.initRepository(p).then(async r => {
+            await gitService.saveRecentRepository(r.path);
+            await state.openRepo(r.path);
+            return r;
+          })
+        );
+      });
+    });
+
+    on('menu://repo_management', () => {
+      useGitStore.setState({ repoMgmtOpen: true });
+    });
+
+    on('menu://check_update', () => {
+      setUpdateOpen(true);
+    });
+
+    on('menu://about', () => {
+      useGitStore.setState({ settingsTab: 'about', settingsOpen: true });
+    });
+
+    on('menu://open_terminal', () => {
+      const { repo } = useGitStore.getState();
+      if (repo) void invoke('open_in_terminal', { path: repo.path });
+    });
+
+    on('menu://open_file_manager', () => {
+      const { repo } = useGitStore.getState();
+      if (repo) void invoke('open_in_file_manager', { path: repo.path });
+    });
+
+    on('menu://preferences', () => {
+      useGitStore.setState({ settingsOpen: true, settingsTab: 'general' });
+    });
+
+    on('menu://refresh', () => {
+      void useGitStore.getState().refresh();
+    });
+
+    on('menu://relaunch', () => {
+      import('@tauri-apps/plugin-process').then(({ relaunch }) => void relaunch());
+    });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('keydown', onKey);
+      unlistens.forEach(u => u());
+    };
+  }, []);
+
+  const startResize = (move: (event: MouseEvent) => void) => (event: ReactMouseEvent) => {
+    event.preventDefault();
+    document.body.style.cursor = event.currentTarget.classList.contains('cursor-col-resize') ? 'col-resize' : 'row-resize';
+    document.body.style.userSelect = 'none';
+    const stop = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', stop);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', stop);
+  };
 
   return (
-    <div className="flex h-full flex-col bg-pilot-bg text-slate-100 overflow-hidden">
-      <TopBar />
-
-      {/* Main 3-column layout like GitKraken */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-
-        {/* Column 1: Sidebar — branches, remotes, tags, stashes */}
-        <Sidebar />
-
-        {/* Column 2 (center): Commit graph — largest area */}
-        <div className="flex min-h-0 flex-col flex-1 min-w-0 border-r border-pilot-line">
-          <GitGraph />
-          {/* Commit details panel (slides in below graph when commit selected) */}
-          {s.selectedCommit && (
-            <div className="shrink-0 border-t border-pilot-line max-h-48 overflow-auto">
-              <CommitDetails />
-            </div>
+    <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
+      <DialogHost />
+      {settingsOpen && <SettingsPanel />}
+      {repoMgmtOpen && <RepoManagementPanel />}
+      {updateOpen && <UpdateDialog onClose={() => { setUpdateOpen(false); setUpdateTestMode(false); }} testMode={updateTestMode} channel={updateChannel} />}
+      {appVersion && (
+        <button
+          className="fixed bottom-2 right-3 z-40 flex items-center gap-1.5 rounded border border-[#30363d] bg-[#161b22] px-2 py-0.5 text-[10px] font-mono text-slate-500 transition-colors hover:border-pilot-blue/40 hover:text-slate-300"
+          title="Check for update"
+          onClick={() => setUpdateOpen(true)}
+        >
+          <GitPilotIcon size={13} />
+          <span className="text-slate-600">git</span><span className="font-bold text-slate-400">PILOT</span>
+          <span className="mx-0.5 text-[#30363d]">·</span>v{appVersion}
+          {updateChannel !== 'stable' && (
+            <span className="rounded bg-amber-500/20 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-amber-400">
+              {updateChannel}
+            </span>
           )}
+        </button>
+      )}
+      <RepoTabs />
+      <TopBar />
+      {newTabOpen && <NewTabPanel />}
+      {!repo && !newTabOpen && <WelcomeScreen />}
+
+      {repo && !newTabOpen && <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 shrink-0" style={{ width: sidebarWidth }}>
+          <Sidebar />
+        </div>
+        <div
+          className="group relative w-[5px] shrink-0 cursor-col-resize border-r border-pilot-line bg-[#161b22] transition-colors hover:bg-pilot-blue/30"
+          onMouseDown={startResize(event => setSidebarWidth(Math.min(360, Math.max(190, event.clientX))))}
+        >
+          <div className="absolute inset-y-0 left-[1px] w-[3px] rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: '#14b8a6', top: 'calc(50% - 20px)', height: 40, borderRadius: 4 }} />
         </div>
 
-        {/* Column 3 (right): Staged/unstaged files + diff viewer */}
-        <aside className="flex min-h-0 flex-col bg-[#080d19] w-[380px] shrink-0">
-          <StatusPanel />
-          {s.conflict ? <MergeResolver /> : <DiffViewer />}
-          <CommitPanel />
-          <AiPanel />
-          <SettingsPanel />
-        </aside>
-      </div>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-pilot-bg">
+          {showMergePanel ? <MergeConflictPanel /> : (
+            <>
+              <div className={`min-h-0 flex-1 flex-col ${diff ? 'hidden' : 'flex'}`}><GitGraph /></div>
+              {diff && <DiffViewer />}
+            </>
+          )}
+        </main>
 
-      <ConsolePanel />
+        <div
+          className="group relative w-[5px] shrink-0 cursor-col-resize border-l border-pilot-line bg-[#161b22] transition-colors hover:bg-pilot-blue/30"
+          onMouseDown={startResize(event => setRightWidth(Math.min(640, Math.max(360, window.innerWidth - event.clientX))))}
+        >
+          <div className="absolute inset-y-0 left-[1px] w-[3px] rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: '#14b8a6', top: 'calc(50% - 20px)', height: 40, borderRadius: 4 }} />
+        </div>
+        <aside className="relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-[#0d1117]" style={{ width: rightWidth }}>
+          {/* Tab bar */}
+          <div className="flex shrink-0 border-b border-pilot-line bg-[#161b22]">
+            <button
+              className={`px-4 py-2.5 text-xs font-semibold tracking-wide transition-colors ${rightPanelTab === 'working' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-400 hover:text-slate-200'}`}
+              onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
+            >
+              Working Directory
+            </button>
+            <button
+              className={`px-4 py-2.5 text-xs font-semibold tracking-wide transition-colors ${rightPanelTab === 'review' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-400 hover:text-slate-200'}`}
+              onClick={() => useGitStore.setState({ rightPanelTab: 'review' })}
+            >
+              Code Review
+            </button>
+          </div>
+
+          {rightPanelTab === 'working' ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <StatusPanel />
+              <CommitPanel />
+              {aiText && <AiPanel />}
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {selectedCommit && !conflict && (
+                <div className="min-h-[180px] flex-1 overflow-auto border-b border-pilot-line bg-pilot-panel">
+                  <CommitDetails />
+                </div>
+              )}
+              {conflict && <MergeResolver />}
+              {!selectedCommit && !conflict && (
+                <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs text-slate-500">
+                  Select a commit to inspect it.
+                </div>
+              )}
+              {aiText && <AiPanel />}
+            </div>
+          )}
+        </aside>
+      </div>}
+
+      {repo && !newTabOpen && <ConsolePanel
+        height={consoleHeight}
+        onResizeStart={startResize(event => setConsoleHeight(Math.min(360, Math.max(80, window.innerHeight - event.clientY))))}
+      />}
     </div>
   );
 }

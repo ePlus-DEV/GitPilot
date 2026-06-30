@@ -9,12 +9,20 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
-    "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml --locked"
+    "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
+    "test": "npm run test:welcome && npm run typecheck && npm run test:rust",
+    "test:welcome": "node --test scripts/welcomeSetupUtils.test.mjs",
+    "test:ui": "vitest",
+    "test:ui:run": "vitest run"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
+    "@pierre/diffs": "^1.2.11",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "@vitejs/plugin-react": "^4.3.0",
     "lucide-react": "^1.21.0",
     "react": "^18.3.1",
@@ -25,10 +33,16 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "autoprefixer": "^10.4.20",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.41",
-    "tailwindcss": "^3.4.10"
+    "tailwindcss": "^3.4.10",
+    "vitest": "^4.1.9"
   }
 }

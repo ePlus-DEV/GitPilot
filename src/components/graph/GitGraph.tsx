@@ -1,90 +1,1151 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Filter, GitCommitHorizontal, Search, X } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { MouseEvent as ReactMouseEvent } from 'react';
+import { ChevronDown, Cloud, EyeOff, GitCommitHorizontal, Monitor, Pencil, RefreshCw, Search, Settings2, Tag, X } from 'lucide-react';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
-import type { CommitInfo, HistoryFilters } from '../../types/git';
+import { useLayoutStore } from '../../store/layoutStore';
+import { gitService } from '../../services/gitService';
+import type { CommitGraphRow, CommitInfo, HistoryFilters } from '../../types/git';
+import { ColumnConfigMenu } from './ColumnConfigMenu';
+import { gpPrompt, gpConfirm } from '../common/Dialog';
 
-const LANE_COLORS = ['#38bdf8','#a78bfa','#34d399','#fb923c','#f472b6','#facc15','#60a5fa','#4ade80','#e879f9','#f87171'];
+const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
 const ROW_H = 34;
-const LANE_W = 18;
+const LANE_W = 12;          // Tighter lanes — more branches visible, closer to GitKraken spacing
 const CIRCLE_R = 4;
-const PAD_LEFT = 10;
+const STROKE_W = 1.8;       // Slightly thicker than before for crisper lines
+const PAD_LEFT = 4;
+const OVERSCAN = 8;
+const MAX_LANES = 14;       // Support more parallel lanes before truncating
+const COMPACT_LANES = 6;    // Compact mode: show fewer lanes, narrower column
+const MAX_GRAPH_CHARS = MAX_LANES * 2;
+const GRAPH_W = MAX_LANES * LANE_W + PAD_LEFT * 2;
+const GRAPH_COL_W = GRAPH_W + 4;
+const COMPACT_GRAPH_COL_W = COMPACT_LANES * LANE_W + PAD_LEFT * 2 + 4;
+const BRANCH_COL_W = 148;
+const AUTHOR_W = 110;
+const DATE_W = 72;
+const HASH_W = 64;
+const CHANGES_W = 80;
+const LOAD_MORE_H = 58;
 
-type RowData = { commit: CommitInfo; lane: number; color: string; lines: Array<{ fromLane: number; toLane: number; color: string; pos: 'top' | 'bottom' }>; maxLane: number };
+type RowData = {
+  commit: CommitInfo;
+  graph: CommitGraphRow | null;
+};
 
-function buildRows(commits: CommitInfo[]): RowData[] {
-  const lanes: Array<{ hash: string; colorIdx: number } | null> = [];
-  const colorCounter = { n: 0 };
-  const nextColor = () => colorCounter.n++ % LANE_COLORS.length;
-  const findLane = (hash: string) => lanes.findIndex(l => l?.hash === hash);
-  const freeLane = () => { const idx = lanes.findIndex(l => l === null); return idx === -1 ? lanes.length : idx; };
-  const rows: RowData[] = [];
-  for (const commit of commits) {
-    let myLane = findLane(commit.hash);
-    let myColorIdx: number;
-    if (myLane === -1) { myLane = freeLane(); myColorIdx = nextColor(); if (myLane === lanes.length) lanes.push(null); lanes[myLane] = { hash: commit.hash, colorIdx: myColorIdx }; }
-    else myColorIdx = lanes[myLane]!.colorIdx;
-    const myColor = LANE_COLORS[myColorIdx];
-    const lines: RowData['lines'] = [];
-    for (let i = 0; i < lanes.length; i++) if (i !== myLane && lanes[i]) lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[lanes[i]!.colorIdx], pos: 'top' });
-    const parents = commit.parents ?? [];
-    lanes[myLane] = null;
-    if (parents[0]) { const existingLane = findLane(parents[0]); if (existingLane === -1) lanes[myLane] = { hash: parents[0], colorIdx: myColorIdx }; else lines.push({ fromLane: myLane, toLane: existingLane, color: myColor, pos: 'bottom' }); }
-    for (let i = 1; i < parents.length; i++) { const parent = parents[i]; const existingLane = findLane(parent); if (existingLane === -1) { const newLane = freeLane(); const newColorIdx = nextColor(); if (newLane === lanes.length) lanes.push(null); lanes[newLane] = { hash: parent, colorIdx: newColorIdx }; lines.push({ fromLane: myLane, toLane: newLane, color: LANE_COLORS[newColorIdx], pos: 'bottom' }); } else lines.push({ fromLane: myLane, toLane: existingLane, color: LANE_COLORS[lanes[existingLane]!.colorIdx], pos: 'bottom' }); }
-    for (let i = 0; i < lanes.length; i++) if (i !== myLane && lanes[i]) lines.push({ fromLane: i, toLane: i, color: LANE_COLORS[lanes[i]!.colorIdx], pos: 'bottom' });
-    rows.push({ commit, lane: myLane, color: myColor, lines, maxLane: Math.max(myLane, ...lanes.map((l, i) => l ? i : 0)) });
-  }
-  return rows;
+function relativeDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return dateStr;
+  const diffMs = Date.now() - d.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+  return `${Math.floor(diffDays / 365)}y ago`;
 }
 
+const isMergeCommit = (c: CommitInfo) => c.parents.length > 1 || /^merge /i.test(c.message);
+
 const normalized = (value: string) => value.toLowerCase().trim();
+
 function matchesCommit(commit: CommitInfo, query: string) {
-  const q = normalized(query); if (!q) return true;
+  const q = normalized(query);
+  if (!q) return true;
   const refNames = commit.refs.join(' ');
   return [commit.message, commit.hash, commit.shortHash, commit.author, refNames].some(v => normalized(v).includes(q));
 }
 
-function GraphRow({ row, selected, dimmed, onClick, rowRef }: { row: RowData; selected: boolean; dimmed: boolean; onClick: () => void; rowRef?: (node: HTMLButtonElement | null) => void }) {
-  const svgWidth = (row.maxLane + 1) * LANE_W + PAD_LEFT * 2;
-  const cy = ROW_H / 2; const cx = PAD_LEFT + row.lane * LANE_W;
-  return <button ref={rowRef} onClick={onClick} className={`flex w-full items-center border-t border-pilot-line text-left transition-colors hover:bg-slate-800/60 ${selected ? 'bg-slate-800 ring-1 ring-inset ring-sky-500/40' : ''} ${dimmed ? 'opacity-35' : ''}`} style={{ height: ROW_H }}>
-    <svg width={svgWidth} height={ROW_H} className="shrink-0 overflow-visible">
-      {row.lines.map((ln, i) => { const x1 = PAD_LEFT + ln.fromLane * LANE_W; const x2 = PAD_LEFT + ln.toLane * LANE_W; const y1 = ln.pos === 'bottom' ? cy : 0; const y2 = ln.pos === 'top' ? cy : ROW_H; return x1 === x2 ? <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={ln.color} strokeWidth={1.6} /> : <path key={i} d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`} fill="none" stroke={ln.color} strokeWidth={1.6} />; })}
-      <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill={row.color} opacity={0.18} /><circle cx={cx} cy={cy} r={CIRCLE_R} fill={row.color} />{row.commit.head && <circle cx={cx} cy={cy} r={CIRCLE_R + 3} fill="none" stroke={row.color} strokeWidth={1.5} />}
-    </svg>
-    <div className="min-w-0 flex flex-1 items-center gap-3 pr-3"><div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5">{row.commit.refs.slice(0, 5).map(ref => <span key={ref} className="shrink-0 rounded border border-sky-400/30 bg-sky-400/10 px-1 py-0 text-[9px] font-semibold text-sky-300">{ref.replace('HEAD -> ', '').replace('tag: ', '')}</span>)}<span className="truncate text-xs text-slate-200">{row.commit.message}</span></div><div className="mt-0.5 text-[10px] text-slate-500">{row.commit.shortHash} · {row.commit.author} · {row.commit.date}</div></div>{row.commit.parents.length > 1 && <span className="rounded bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-300">merge</span>}</div>
-  </button>;
+function cleanRef(ref: string) {
+  return ref.replace('HEAD -> ', '').replace('tag: ', '');
 }
 
+
+const laneX = (col: number) => PAD_LEFT + Math.max(0, col) * LANE_W;
+
+/** Bezier curve from (x1, yMid) to (x2, yEnd) — immediately diverges horizontally to avoid overlap with straight lane lines. */
+function edgePath(x1: number, x2: number, yMid: number, yEnd: number): string {
+  if (x1 === x2) return `M ${x1} ${yMid} L ${x1} ${yEnd}`;
+  const mx = (x1 + x2) / 2;
+  return `M ${x1} ${yMid} C ${mx} ${yMid} ${mx} ${yEnd} ${x2} ${yEnd}`;
+}
+
+/** Single shared SVG layer over the visible row range — eliminates per-row clipping that breaks lane lines. */
+function GraphLayer({
+  rows,
+  startIndex,
+  laneLabels,
+  activeLane,
+  left,
+  graphColW,
+}: {
+  rows: RowData[];
+  startIndex: number;
+  laneLabels: Map<number, string>;
+  activeLane: number;
+  left: number;
+  graphColW: number;
+}) {
+  const [nodeGhost, setNodeGhost] = useState<{ x: number; y: number; color: string; label: string } | null>(null);
+  const [hoveredLane, setHoveredLane] = useState<number | null>(null);
+  const svgH = rows.length * ROW_H + ROW_H;
+
+  // Opacity helpers — activeLane < 0 means "no focus, show everything equally"
+  const lineO = (col: number) => {
+    if (activeLane < 0) return 1;
+    if (col === activeLane) return 1;
+    if (hoveredLane === col) return 0.72;
+    return 0.18;
+  };
+  const edgeO = (from: number, to: number) => {
+    if (activeLane < 0) return 1;
+    if (from === activeLane || to === activeLane) return 0.78;
+    if (hoveredLane === from || hoveredLane === to) return 0.65;
+    return 0.16;
+  };
+  const nodeO = (lane: number) => {
+    if (activeLane < 0) return 1;
+    if (lane === activeLane) return 1;
+    if (hoveredLane === lane) return 0.82;
+    return 0.3;
+  };
+
+  return (
+    <>
+      <svg
+        className="pointer-events-none absolute"
+        style={{ left, top: startIndex * ROW_H, width: graphColW, height: svgH, zIndex: 2, overflow: 'hidden' }}
+        shapeRendering="geometricPrecision"
+      >
+        {rows.map((row, i) => {
+          const g = row.graph;
+          const cy = i * ROW_H + ROW_H / 2;
+          if (!g) {
+            return (
+              <g key={row.commit.hash || `r${i}`}>
+                <circle cx={PAD_LEFT} cy={cy} r={CIRCLE_R} fill={LANE_COLORS[0]} />
+                <circle cx={PAD_LEFT} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
+                <circle cx={PAD_LEFT} cy={cy} r={CIRCLE_R - 1.5} fill={LANE_COLORS[0]} opacity={0.5} />
+              </g>
+            );
+          }
+
+          const rowTop = i * ROW_H;
+          const rowBottom = (i + 1) * ROW_H;
+          const cx = laneX(g.lane);
+          const nodeColor = LANE_COLORS[g.colorIndex % LANE_COLORS.length];
+          const edgeTargetCols = new Set(g.edges.map(([, toCol]) => toCol));
+          const hasBadge = g.refs.some(r => r.refType === 'local' || r.refType === 'remote');
+          const ghostLabel = hasBadge ? undefined : laneLabels.get(g.lane);
+          const nO = nodeO(g.lane);
+
+          return (
+            <g key={row.commit.hash || `r${i}`}>
+              {/* Top-half lane continuations */}
+              {g.topLines.map(([col, ci], j) => (
+                <line key={`t${i}-${j}`}
+                  x1={laneX(col)} y1={rowTop} x2={laneX(col)} y2={cy}
+                  stroke={LANE_COLORS[ci % LANE_COLORS.length]}
+                  strokeWidth={col === activeLane ? STROKE_W + 0.3 : STROKE_W}
+                  strokeLinecap="round"
+                  opacity={lineO(col)} />
+              ))}
+              {/* Bottom-half lane continuations (skip bezier target cols — bezier covers them) */}
+              {g.bottomLines
+                .filter(([col]) => !edgeTargetCols.has(col))
+                .map(([col, ci], j) => (
+                  <line key={`b${i}-${j}`}
+                    x1={laneX(col)} y1={cy} x2={laneX(col)} y2={rowBottom}
+                    stroke={LANE_COLORS[ci % LANE_COLORS.length]}
+                    strokeWidth={col === activeLane ? STROKE_W + 0.3 : STROKE_W}
+                    strokeLinecap="round"
+                    opacity={lineO(col)} />
+                ))}
+              {/* Bezier merge/fork edges */}
+              {g.edges.map(([fromCol, toCol, ci], j) => (
+                <path key={`e${i}-${j}`}
+                  d={edgePath(laneX(fromCol), laneX(toCol), cy, rowBottom)}
+                  stroke={LANE_COLORS[ci % LANE_COLORS.length]}
+                  strokeWidth={STROKE_W} fill="none" strokeLinecap="round"
+                  opacity={edgeO(fromCol, toCol)} />
+              ))}
+              {/* Commit node — glow → outer → dark ring → inner */}
+              <g opacity={nO}>
+                <circle cx={cx} cy={cy} r={CIRCLE_R + 3.5} fill={nodeColor} opacity={0.13} />
+                <circle cx={cx} cy={cy} r={CIRCLE_R} fill={nodeColor} />
+                <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill="#0d1117" />
+                <circle cx={cx} cy={cy} r={CIRCLE_R - 1.5} fill={nodeColor} opacity={0.5} />
+                {g.isHead && (
+                  <circle cx={cx} cy={cy} r={CIRCLE_R + 2.5}
+                    fill="none" stroke={nodeColor} strokeWidth={1.5} opacity={0.9} />
+                )}
+                {g.isMerge && !g.isHead && (
+                  <circle cx={cx} cy={cy} r={CIRCLE_R + 2}
+                    fill="none" stroke={nodeColor} strokeWidth={1} opacity={0.55} />
+                )}
+              </g>
+              {/* Hover hit-area — always present so inactive lanes can be hovered */}
+              <circle cx={cx} cy={cy} r={CIRCLE_R + 5}
+                fill="transparent"
+                style={{ pointerEvents: 'all', cursor: 'default' }}
+                onMouseEnter={(e) => {
+                  setHoveredLane(g.lane);
+                  if (ghostLabel) {
+                    const rect = (e.currentTarget as Element).getBoundingClientRect();
+                    setNodeGhost({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color: nodeColor, label: ghostLabel });
+                  }
+                }}
+                onMouseLeave={() => { setHoveredLane(null); setNodeGhost(null); }}
+              />
+            </g>
+          );
+        })}
+      </svg>
+      {nodeGhost && createPortal(
+        <div
+          className="pointer-events-none fixed z-[9990] whitespace-nowrap rounded px-1.5 text-[11px] font-semibold"
+          style={{
+            left: nodeGhost.x,
+            top: nodeGhost.y,
+            transform: 'translate(-110%, -50%)',
+            marginLeft: -4,
+            opacity: 0.62,
+            background: '#1a2233',
+            color: nodeGhost.color,
+            border: `1px solid ${nodeGhost.color}55`,
+            maxWidth: 180,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            lineHeight: '18px',
+          }}
+        >
+          {nodeGhost.label}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function ChangesBar({ ins, del, maxTotal }: { ins: number; del: number; maxTotal: number }) {
+  const total = ins + del;
+  if (total === 0 || maxTotal === 0) return null;
+  const BAR_W = 36;
+  const scale = Math.min(1, total / maxTotal);
+  const insW = total > 0 ? Math.round((ins / total) * BAR_W * scale) : 0;
+  const delW = Math.round(BAR_W * scale) - insW;
+  return (
+    <div className="flex items-center gap-1 px-2">
+      <div className="flex overflow-hidden rounded-[2px]" style={{ width: BAR_W, height: 6 }}>
+        {insW > 0 && <div className="bg-emerald-500" style={{ width: insW }} />}
+        {delW > 0 && <div className="bg-red-500" style={{ width: delW }} />}
+        {insW + delW < BAR_W && <div className="bg-[#21262d]" style={{ width: BAR_W - insW - delW }} />}
+      </div>
+      <div className="flex flex-col leading-none">
+        {ins > 0 && <span className="text-[8px] font-mono text-emerald-500">+{ins}</span>}
+        {del > 0 && <span className="text-[8px] font-mono text-red-500">-{del}</span>}
+      </div>
+    </div>
+  );
+}
+
+type BadgeHover = {
+  x: number; y: number; h: number;
+  name: string;
+  local?: boolean; remote?: boolean; isTag?: boolean;
+  bg: string; fg: string; bdr: string;
+};
+
+function ExpandedBadge({ b }: { b: BadgeHover }) {
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[9999] flex items-center gap-1 whitespace-nowrap rounded px-1.5 text-[12px] font-semibold"
+      style={{
+        left: b.x, top: b.y, height: b.h,
+        /* Solid dark bg so commit message doesn't bleed through */
+        background: '#1a2233',
+        color: b.fg,
+        border: b.bdr,
+        alignItems: 'center',
+        boxShadow: '0 2px 16px rgba(0,0,0,0.7)',
+      }}
+    >
+      {b.name}
+      {b.local && <Monitor size={10} className="shrink-0 opacity-80" />}
+      {b.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
+      {b.isTag && <Tag size={10} className="shrink-0 opacity-80" />}
+    </div>,
+    document.body,
+  );
+}
+
+type BadgeGroup = { name: string; displayName: string; local: boolean; remote: boolean };
+
+function buildBadgeGroups(refs: import('../../types/git').GraphRef[], currentBranch: string): {
+  groups: BadgeGroup[];
+  tagList: string[];
+} {
+  const groups: BadgeGroup[] = [];
+  const usedRemoteNames = new Set<string>();
+  for (const ref of refs) {
+    if (ref.refType !== 'local') continue;
+    const paired = refs.find(r => {
+      if (r.refType !== 'remote') return false;
+      if (ref.upstream) return r.name === ref.upstream;
+      const slash = r.name.indexOf('/');
+      return slash >= 0 && r.name.slice(slash + 1) === ref.name;
+    });
+    if (paired) usedRemoteNames.add(paired.name);
+    groups.push({ name: ref.name, displayName: ref.name, local: true, remote: !!paired });
+  }
+  for (const ref of refs) {
+    if (ref.refType !== 'remote') continue;
+    if (usedRemoteNames.has(ref.name)) continue;
+    if (ref.name.endsWith('/HEAD')) continue;
+    const slash = ref.name.indexOf('/');
+    const displayName = slash >= 0 ? ref.name.slice(slash + 1) : ref.name;
+    groups.push({ name: ref.name, displayName, local: false, remote: true });
+  }
+  // Current branch first
+  const idx = groups.findIndex(g => g.name === currentBranch);
+  if (idx > 0) {
+    const [cur] = groups.splice(idx, 1);
+    groups.unshift(cur);
+  }
+  return { groups, tagList: refs.filter(r => r.refType === 'tag').map(r => r.name) };
+}
+
+function BranchCell({ row, selected, onBranchContextMenu, currentBranch, branchColW }: {
+  row: RowData;
+  selected: boolean;
+  onBranchContextMenu?: (e: ReactMouseEvent, name: string, local: boolean, remote: boolean) => void;
+  currentBranch: string;
+  branchColW: number;
+}) {
+  const laneColor = row.graph
+    ? LANE_COLORS[row.graph.colorIndex % LANE_COLORS.length]
+    : LANE_COLORS[0];
+  const [hover, setHover] = useState<BadgeHover | null>(null);
+
+  // Use typed refs from graph data — avoids '/' ambiguity (local feature/xxx vs remote origin/xxx)
+  const graphRefs = row.graph?.refs ?? [];
+  const hasAnyRef = graphRefs.some(r => r.refType !== 'head');
+  if (!hasAnyRef || branchColW === 0) return <div className="shrink-0" style={{ width: branchColW }} />;
+
+  const isHead = graphRefs.some(r => r.refType === 'head');
+
+  const { groups, tagList } = buildBadgeGroups(graphRefs, currentBranch);
+
+  const showGroups = groups.slice(0, 2);
+  const showTags = tagList.slice(0, Math.max(0, 2 - showGroups.length));
+  const extra = (groups.length - showGroups.length) + (tagList.length - showTags.length);
+  const allNames = [...groups.map((g: BadgeGroup) => g.displayName), ...tagList].join(', ');
+  const totalBadges = showGroups.length + showTags.length;
+  const badgeMaxW = totalBadges <= 1 ? 130 : 64;
+
+  const badgeBg = selected ? `${laneColor}55` : `${laneColor}38`;
+  const badgeText = selected ? '#ffffff' : laneColor;
+  const badgeBorder = selected ? `1px solid ${laneColor}cc` : `1px solid ${laneColor}70`;
+  // Remote-only badges are visually dimmer
+  const remoteBg = selected ? `${laneColor}33` : `${laneColor}22`;
+  const remoteText = selected ? `${laneColor}cc` : `${laneColor}99`;
+  const remoteBorder = `1px solid ${laneColor}44`;
+
+  const onEnter = (
+    e: React.MouseEvent,
+    name: string,
+    opts: { local?: boolean; remote?: boolean; isTag?: boolean },
+    bg: string, fg: string, bdr: string,
+  ) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setHover({ x: r.left, y: r.top, h: r.height, name, ...opts, bg, fg, bdr });
+  };
+
+  return (
+    <>
+      <div
+        className="flex shrink-0 items-center justify-end gap-0.5 overflow-hidden px-1"
+        style={{ width: branchColW }}
+        onMouseLeave={() => setHover(null)}
+      >
+        {isHead && (
+          <span className="shrink-0 text-[11px] font-bold leading-none text-yellow-400">✓</span>
+        )}
+        {showGroups.map(g => {
+          const isRemoteOnly = !g.local && g.remote;
+          const bg = isRemoteOnly ? remoteBg : badgeBg;
+          const fg = isRemoteOnly ? remoteText : badgeText;
+          const bdr = isRemoteOnly ? remoteBorder : badgeBorder;
+          return (
+            <span
+              key={g.name}
+              className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
+              style={{ maxWidth: badgeMaxW, background: bg, color: fg, border: bdr }}
+              onMouseEnter={e => onEnter(e, g.name, { local: g.local, remote: g.remote }, bg, fg, bdr)}
+              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBranchContextMenu?.(e, g.name, g.local, g.remote); }}
+            >
+              <span className="min-w-0 truncate">{g.displayName}</span>
+              {g.local && <Monitor size={10} className="shrink-0 opacity-80" />}
+              {g.remote && <Cloud size={10} className="shrink-0 opacity-80" />}
+            </span>
+          );
+        })}
+        {showTags.map(tag => (
+          <span
+            key={tag}
+            className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
+            style={{ maxWidth: badgeMaxW, background: '#a78bfa38', color: '#c4b5fd', border: '1px solid #a78bfa70' }}
+            onMouseEnter={e => onEnter(e, tag, { isTag: true }, '#a78bfa38', '#c4b5fd', '1px solid #a78bfa70')}
+          >
+            <span className="min-w-0 truncate">{tag}</span>
+            <Tag size={10} className="shrink-0 opacity-80" />
+          </span>
+        ))}
+        {extra > 0 && (
+          <span
+            className="shrink-0 cursor-default rounded px-0.5 text-[9px] text-slate-500"
+            onMouseEnter={e => onEnter(e, allNames, {}, '#1e2633', '#94a3b8', '1px solid #334155')}
+          >
+            +{extra}
+          </span>
+        )}
+      </div>
+      {hover && <ExpandedBadge b={hover} />}
+    </>
+  );
+}
+
+const GraphRow = memo(function GraphRow({
+  row,
+  selected,
+  dimmed,
+  maxTotal,
+  isActiveLane,
+  onClick,
+  onContextMenu,
+  onBranchContextMenu,
+  branchColW,
+  graphColW,
+  changesW,
+  authorW,
+  dateW,
+  shaW,
+  smartBranch,
+  currentBranch,
+}: {
+  row: RowData;
+  selected: boolean;
+  dimmed: boolean;
+  maxTotal: number;
+  isActiveLane: boolean;
+  onClick: () => void;
+  onContextMenu: (event: ReactMouseEvent) => void;
+  onBranchContextMenu?: (e: ReactMouseEvent, name: string, local: boolean, remote: boolean) => void;
+  branchColW: number;
+  graphColW: number;
+  changesW: number;
+  authorW: number;
+  dateW: number;
+  shaW: number;
+  smartBranch: boolean;
+  currentBranch: string;
+}) {
+  const ins = row.commit.insertions ?? 0;
+  const del = row.commit.deletions ?? 0;
+  const lane = row.graph?.lane ?? 0;
+  const lci = row.graph?.colorIndex ?? 0;
+  const bandColor = LANE_COLORS[lci % LANE_COLORS.length];
+  const lcx = branchColW + laneX(lane);
+  const graphRight = branchColW + graphColW;
+  const bandGradient = isActiveLane
+    ? `linear-gradient(90deg, transparent ${Math.max(0, lcx - 20)}px, ${bandColor}0e ${lcx}px, ${bandColor}12 ${lcx + 12}px, ${bandColor}09 ${Math.min(lcx + 55, graphRight - 20)}px, transparent ${graphRight}px)`
+    : undefined;
+
+  return (
+    <button
+      type="button"
+      draggable={false}
+      onMouseDown={e => e.preventDefault()}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className={`flex w-full select-none items-center border-t border-pilot-line/60 text-left transition-colors hover:bg-[#21262d]/60 ${selected ? 'bg-teal-900/70 text-white hover:bg-teal-900/70' : 'text-slate-300'} ${dimmed ? 'opacity-35' : ''}`}
+      style={{ height: ROW_H, backgroundImage: selected ? undefined : bandGradient }}
+    >
+      {/* Branch column — leftmost */}
+      <BranchCell
+        row={row}
+        selected={selected}
+        onBranchContextMenu={onBranchContextMenu}
+        currentBranch={currentBranch}
+        branchColW={branchColW}
+      />
+
+      {/* Graph column — empty placeholder; graph rendered in shared GraphLayer above */}
+      {graphColW > 0 && <div className="shrink-0" style={{ width: graphColW }} />}
+
+      {/* Message column — inline branch badges when smartBranch enabled */}
+      <div className="flex min-w-0 flex-1 items-center gap-1 px-1.5">
+        {smartBranch && (() => {
+          const graphRefs = row.graph?.refs ?? [];
+          const hasRef = graphRefs.some(r => r.refType !== 'head');
+          if (!hasRef) return null;
+          const laneColor = row.graph ? LANE_COLORS[row.graph.colorIndex % LANE_COLORS.length] : LANE_COLORS[0];
+          const { groups, tagList } = buildBadgeGroups(graphRefs, currentBranch);
+          const inlineBadges = [
+            ...groups.map(g => ({ label: g.displayName.split('/').pop() ?? g.displayName, isTag: false })),
+            ...tagList.map(t => ({ label: t, isTag: true })),
+          ].slice(0, 3);
+          const overflow = (groups.length + tagList.length) - inlineBadges.length;
+          return (
+            <span className="flex shrink-0 items-center gap-0.5">
+              {inlineBadges.map(b => (
+                <span
+                  key={b.label}
+                  className="max-w-[80px] truncate rounded px-1 py-px text-[10px] font-medium leading-tight"
+                  style={{
+                    background: b.isTag ? '#7c3aed22' : `${laneColor}30`,
+                    color: b.isTag ? '#a78bfa' : laneColor,
+                    border: `1px solid ${b.isTag ? '#7c3aed55' : `${laneColor}60`}`,
+                  }}
+                >
+                  {b.label}
+                </span>
+              ))}
+              {overflow > 0 && (
+                <span className="text-[10px] text-slate-500">+{overflow}</span>
+              )}
+            </span>
+          );
+        })()}
+        <div className={`min-w-0 truncate text-xs ${selected ? 'font-medium text-white' : 'text-slate-200'}`}>
+          {row.commit.message}
+        </div>
+      </div>
+
+      {/* Changes column */}
+      {changesW > 0 && (
+        <div className="shrink-0 overflow-hidden" style={{ width: changesW }}>
+          <ChangesBar ins={ins} del={del} maxTotal={maxTotal} />
+        </div>
+      )}
+
+      {/* Author column */}
+      {authorW > 0 && (
+        <div
+          className={`shrink-0 overflow-hidden px-2 text-[11px] ${selected ? 'text-white' : 'text-slate-400'}`}
+          style={{ width: authorW }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`h-4 w-4 shrink-0 rounded text-center text-[9px] font-bold leading-4 ${selected ? 'bg-white/20 text-white' : 'bg-[#21262d] text-slate-300'}`}
+            >
+              {row.commit.author.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="truncate">{row.commit.author}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Date column */}
+      {dateW > 0 && (
+        <div
+          className={`shrink-0 px-2 text-[11px] ${selected ? 'text-slate-200' : 'text-slate-400'}`}
+          style={{ width: dateW }}
+        >
+          {relativeDate(row.commit.date)}
+        </div>
+      )}
+
+      {/* Hash column */}
+      {shaW > 0 && (
+        <div
+          className={`shrink-0 px-2 font-mono text-[10px] ${selected ? 'text-slate-200' : 'text-slate-500'}`}
+          style={{ width: shaW }}
+        >
+          {row.commit.shortHash}
+        </div>
+      )}
+    </button>
+  );
+});
+
 export function GitGraph() {
-  const { history, selectedCommit, selectCommit, historyLimit, historyFilters, loadHistory } = useGitStore(s => ({ history: s.history, selectedCommit: s.selectedCommit, selectCommit: s.selectCommit, historyLimit: s.historyLimit, historyFilters: s.historyFilters, loadHistory: s.loadHistory }));
+  const repo = useGitStore(s => s.repo?.path);
+  const history = useGitStore(s => s.history);
+  const graphData = useGitStore(s => s.graphData);
+  const selectedCommit = useGitStore(s => s.selectedCommit);
+  const selectCommit = useGitStore(s => s.selectCommit);
+  const historyLimit = useGitStore(s => s.historyLimit);
+  const historyFilters = useGitStore(s => s.historyFilters);
+  const status = useGitStore(s => s.status);
+  const currentBranch = useGitStore(s => s.status.currentBranch || s.repo?.currentBranch || 'current branch');
+  const loadHistory = useGitStore(s => s.loadHistory);
+  const fetchAll = useGitStore(s => s.fetchAll);
+  const run = useGitStore(s => s.run);
+  const log = useGitStore(s => s.log);
+  const [fetching, setFetching] = useState(false);
+  const loadingMoreRef = useRef(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const closeConfig = useCallback(() => setConfigOpen(false), []);
+
+  const { columns: cols, compactGraph, smartBranch } = useLayoutStore();
+  const effectiveBranchW = cols.branch ? BRANCH_COL_W : 0;
+  const effectiveGraphW = cols.graph ? (compactGraph ? COMPACT_GRAPH_COL_W : GRAPH_COL_W) : 0;
+  const effectiveChangesW = cols.changes ? CHANGES_W : 0;
+  const effectiveAuthorW = cols.author ? AUTHOR_W : 0;
+  const effectiveDateW = cols.date ? DATE_W : 0;
+  const effectiveShaW = cols.sha ? HASH_W : 0;
+
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<HistoryFilters>(historyFilters);
-  const selectedRef = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => { const id = window.setTimeout(() => { void loadHistory(filters, historyLimit); }, 350); return () => window.clearTimeout(id); }, [filters, historyLimit, loadHistory]);
-  useEffect(() => { selectedRef.current?.scrollIntoView({ block: 'nearest' }); }, [selectedCommit?.hash]);
-  const rows = useMemo(() => buildRows(history), [history]);
+  const [dimMerges, setDimMerges] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(600);
+  const [menu, setMenu] = useState<{ x: number; y: number; commit: CommitInfo }>();
+  const [branchMenu, setBranchMenu] = useState<{ x: number; y: number; name: string; local: boolean; remote: boolean }>();
+  const [listEl, setListEl] = useState<HTMLDivElement | null>(null);
+  const listRefCb = useCallback((el: HTMLDivElement | null) => setListEl(el), []);
+  const didMountRef = useRef(false);
+  const lastAutoScrolledHashRef = useRef<string | undefined>();
+
+  const changedCount =
+    status.staged.length + status.unstaged.length + status.untracked.length + status.conflicted.length;
+
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return; }
+    if (JSON.stringify(filters) === JSON.stringify(historyFilters)) return;
+    const id = window.setTimeout(() => { void loadHistory(filters, historyLimit); }, 350);
+    return () => window.clearTimeout(id);
+  }, [filters, historyFilters, historyLimit, loadHistory]);
+
+  const rows = useMemo((): RowData[] => {
+    const graphMap = new Map(graphData.map(r => [r.sha, r]));
+    return history.map(commit => ({
+      commit,
+      graph: graphMap.get(commit.hash) ?? null,
+    }));
+  }, [history, graphData]);
+  const repoDateRange = useMemo(() => {
+    const dates = history.map(c => c.date).filter(Boolean).sort();
+    if (!dates.length) return undefined;
+    const parseD = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+    return { min: parseD(dates[0]), max: parseD(dates[dates.length - 1]) };
+  }, [history]);
+
   const authors = useMemo(() => Array.from(new Set(history.map(c => c.author))).sort(), [history]);
-  const refs = useMemo(() => Array.from(new Set(history.flatMap(c => c.refs.map(r => r.replace('HEAD -> ', '').replace('tag: ', ''))))).sort(), [history]);
-  const visibleRows = rows.filter(row => matchesCommit(row.commit, search));
+  const refs = useMemo(() => Array.from(new Set(history.flatMap(c => c.refs.map(cleanRef)))).sort(), [history]);
+  const visibleRows = useMemo(() => rows.filter(row => matchesCommit(row.commit, search)), [rows, search]);
   const hasFilter = Boolean(search || filters.branch || filters.author || filters.since || filters.until || filters.keyword || filters.filePath);
+
+  const maxTotal = useMemo(() =>
+    Math.max(1, ...history.map(c => (c.insertions ?? 0) + (c.deletions ?? 0))),
+    [history]
+  );
+
+  // Map lane → branch name: first (newest) branch ref found on each lane, used as ghost label fallback
+  const laneLabels = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const gRow of graphData) {
+      if (!map.has(gRow.lane) && gRow.refs.length > 0) {
+        const ref = gRow.refs.find(r => r.refType === 'local') ?? gRow.refs.find(r => r.refType === 'remote');
+        if (ref) map.set(gRow.lane, ref.name);
+      }
+    }
+    return map;
+  }, [graphData]);
+
+  // Active lane: lane of current branch (for focus/dim effect)
+  const activeLane = useMemo(() => {
+    for (const [lane, name] of laneLabels.entries()) {
+      if (name === currentBranch) return lane;
+    }
+    const headRow = graphData.find(r => r.isHead);
+    return headRow?.lane ?? -1;
+  }, [laneLabels, currentBranch, graphData]);
+
+  // Virtual scroll
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
+  const endIndex = Math.min(visibleRows.length, Math.ceil((scrollTop + viewportHeight) / ROW_H) + OVERSCAN);
+  const renderedRows = visibleRows.slice(startIndex, endIndex);
+  const wdRowH = changedCount > 0 ? ROW_H : 0;
+  const hasMoreCommits = history.length >= historyLimit;
+  const totalListHeight = visibleRows.length * ROW_H + (hasMoreCommits ? 32 : 0);
+
+  const handleFetch = async () => {
+    setFetching(true);
+    try { await fetchAll(); } finally { setFetching(false); }
+  };
+
+  // Auto-load more when scroll near bottom
+  useEffect(() => {
+    if (!hasMoreCommits || loadingMoreRef.current) return;
+    if (scrollTop + viewportHeight * 3 >= visibleRows.length * ROW_H) {
+      loadingMoreRef.current = true;
+      void loadHistory(filters, historyLimit + 500).finally(() => { loadingMoreRef.current = false; });
+    }
+  }, [scrollTop, viewportHeight, visibleRows.length, hasMoreCommits, historyLimit, filters, loadHistory]);
+
   const clear = () => { setSearch(''); setFilters({}); };
-  if (history.length === 0) return <div className="flex h-full items-center justify-center text-sm text-slate-500">Open a repository to see commit history</div>;
-  return <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090e1b]">
-    <div className="sticky top-0 z-10 border-b border-pilot-line bg-[#0d1324] p-2">
-      <div className="mb-2 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500"><GitCommitHorizontal size={13} /> Commit Graph · {visibleRows.length}/{history.length}</div>{hasFilter && <button className="icon-btn h-6" onClick={clear}><X size={12} /> Clear</button>}</div>
-      <div className="grid grid-cols-[1.2fr_140px_140px_110px_110px] gap-2">
-        <label className="relative"><Search size={13} className="pointer-events-none absolute left-2 top-1.5 text-slate-500" /><input className="input h-7 w-full pl-7 text-xs" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search hash, message, author…" /></label>
-        <label className="relative"><Filter size={12} className="pointer-events-none absolute left-2 top-2 text-slate-500" /><select className="input h-7 w-full pl-7 text-xs" value={filters.author ?? ''} onChange={e => setFilters(f => ({ ...f, author: e.target.value || undefined }))}><option value="">All authors</option>{authors.map(a => <option key={a} value={a}>{a}</option>)}</select></label>
-        <select className="input h-7 w-full text-xs" value={filters.branch ?? ''} onChange={e => setFilters(f => ({ ...f, branch: e.target.value || undefined }))}><option value="">All refs</option>{refs.map(r => <option key={r} value={r}>{r}</option>)}</select>
-        <input className="input h-7 text-xs" type="date" value={filters.since ?? ''} onChange={e => setFilters(f => ({ ...f, since: e.target.value || undefined }))} title="Since" />
-        <input className="input h-7 text-xs" type="date" value={filters.until ?? ''} onChange={e => setFilters(f => ({ ...f, until: e.target.value || undefined }))} title="Until" />
+  const commitRevision = (commit: CommitInfo) => commit.hash.trim() || commit.shortHash.trim();
+  const runCommitAction = (label: string, commit: CommitInfo, fn: (revision: string) => Promise<unknown>) => {
+    const revision = commitRevision(commit);
+    if (!repo || !revision) return;
+    void run(label, () => fn(revision));
+  };
+  const separator = (label: string): ContextMenuItem => ({ label, separator: true, action: () => undefined });
+  const copyText = (label: string, value: string) => {
+    if (!value) return;
+    void navigator.clipboard.writeText(value).then(() => log(`${label}: ${value}`)).catch(() => log(value));
+  };
+
+  const commitMenuItems = (commit: CommitInfo): ContextMenuItem[] => {
+    const revision = commitRevision(commit);
+    const short = commit.shortHash || revision.slice(0, 8);
+
+    const cleaned = commit.refs.map(r => cleanRef(r)).filter(r => r !== 'HEAD' && !r.startsWith('tag:'));
+    // Local branches: no slash
+    const localBranches = cleaned.filter(r => !r.includes('/'));
+    // Remote branches: strip remote-name prefix → local name to checkout/track
+    const remoteBranches = cleaned
+      .filter(r => r.includes('/') && !r.endsWith('/HEAD'))
+      .map(r => ({ remote: r, local: r.slice(r.indexOf('/') + 1) }))
+      .filter(({ local }) => !localBranches.includes(local)); // skip if local already listed
+
+    const checkoutBranch = (name: string) => { if (repo) void run(`checkout ${name}`, () => gitService.checkoutBranch(repo, name)); };
+
+    return [
+      ...localBranches.map(branch => ({
+        label: `Checkout  ${branch}`,
+        action: () => { checkoutBranch(branch); },
+      })),
+      ...remoteBranches.map(({ remote, local }) => ({
+        label: `Checkout  ${local}  ← ${remote}`,
+        action: () => { checkoutBranch(local); },
+      })),
+      {
+        label: localBranches.length + remoteBranches.length > 0 ? 'Checkout (detached HEAD)' : 'Checkout this commit',
+        action: async () => {
+          if (await gpConfirm(`Checkout ${short} in detached HEAD?`, true))
+            runCommitAction('checkout commit', commit, rev => gitService.checkoutCommit(repo!, rev));
+        },
+      },
+      {
+        label: 'Create worktree from this commit',
+        action: async () => {
+          const path = await gpPrompt('Worktree path', `../worktree-${short}`);
+          if (path) runCommitAction('create worktree', commit, rev => gitService.createWorktree(repo!, path, rev, false));
+        },
+      },
+      separator('commit-actions'),
+      {
+        label: 'Create branch here',
+        action: async () => {
+          const name = await gpPrompt('New branch name', `branch-${short}`);
+          if (name) runCommitAction('branch from commit', commit, rev => gitService.createBranchFromCommit(repo!, name, rev, true));
+        },
+      },
+      {
+        label: 'Cherry pick commit',
+        action: () => runCommitAction('cherry-pick', commit, rev => gitService.cherryPickCommit(repo!, rev)),
+      },
+      {
+        label: `Rebase ${currentBranch} onto this commit`,
+        action: async () => {
+          if (await gpConfirm(`Rebase ${currentBranch} onto ${short}?`))
+            runCommitAction('rebase', commit, rev => gitService.startRebase(repo!, rev));
+        },
+      },
+      {
+        label: `Reset ${currentBranch} to this commit: soft`,
+        action: async () => {
+          if (await gpConfirm(`Soft reset ${currentBranch} to ${short}?`))
+            runCommitAction('soft reset', commit, rev => gitService.resetToCommit(repo!, rev, 'soft'));
+        },
+      },
+      {
+        label: `Reset ${currentBranch} to this commit: mixed`,
+        action: async () => {
+          if (await gpConfirm(`Mixed reset ${currentBranch} to ${short}?`))
+            runCommitAction('mixed reset', commit, rev => gitService.resetToCommit(repo!, rev, 'mixed'));
+        },
+      },
+      {
+        label: `Reset ${currentBranch} to this commit: hard`,
+        danger: true,
+        action: async () => {
+          if (await gpConfirm(`Hard reset ${currentBranch} to ${short}? This can discard work.`, true))
+            runCommitAction('hard reset', commit, rev => gitService.resetToCommit(repo!, rev, 'hard'));
+        },
+      },
+      {
+        label: 'Revert commit',
+        danger: true,
+        action: async () => {
+          if (await gpConfirm(`Revert ${short}?`))
+            runCommitAction('revert commit', commit, rev => gitService.revertCommit(repo!, rev));
+        },
+      },
+      separator('copy-patch'),
+      {
+        label: 'Copy commit sha',
+        action: () => copyText('Copied commit sha', revision),
+      },
+      {
+        label: 'Create patch from commit',
+        action: () => runCommitAction('create patch', commit, rev => gitService.createPatchFromCommit(repo!, rev)),
+      },
+      separator('tag-actions'),
+      {
+        label: 'Create tag here',
+        action: async () => {
+          const name = await gpPrompt('New tag name', `tag-${short}`);
+          if (name) runCommitAction('tag commit', commit, rev => gitService.createTagFromCommit(repo!, name, rev));
+        },
+      },
+      {
+        label: 'Create annotated tag here',
+        action: async () => {
+          const name = await gpPrompt('New annotated tag name', `tag-${short}`);
+          if (!name) return;
+          const message = await gpPrompt('Tag message', name);
+          if (message)
+            runCommitAction('annotated tag', commit, rev =>
+              gitService.createAnnotatedTagFromCommit(repo!, name, message, rev));
+        },
+      },
+    ];
+  };
+
+  const branchMenuItems = (name: string, isLocal: boolean, isRemote: boolean): ContextMenuItem[] => {
+    const isCurrent = name === currentBranch;
+    const items: ContextMenuItem[] = [];
+
+    // Switch
+    if (isCurrent) {
+      items.push({ label: `✓ ${name}`, disabled: true, action: () => undefined });
+    } else if (isLocal) {
+      items.push({ header: true, label: 'Switch', action: () => undefined });
+      items.push({ label: `Checkout ${name}`, action: () => { if (repo) void run('checkout branch', () => gitService.checkoutBranch(repo!, name)); } });
+    } else if (isRemote) {
+      const local = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+      items.push({ header: true, label: 'Switch', action: () => undefined });
+      items.push({ label: `Checkout ${local} ← ${name}`, action: () => { if (repo) void run('checkout branch', () => gitService.checkoutBranch(repo!, local)); } });
+    }
+
+    // Actions on current branch using this branch
+    if (isLocal && !isCurrent) {
+      items.push(separator('branch-actions'));
+      items.push({ header: true, label: 'Actions', action: () => undefined });
+      items.push({
+        label: `Merge ${name} → ${currentBranch}`,
+        action: async () => { if (await gpConfirm(`Merge ${name} into ${currentBranch}?`)) repo && void run('merge branch', () => gitService.mergeBranch(repo!, name)); },
+      });
+      items.push({
+        label: `Rebase ${currentBranch} onto ${name}`,
+        action: async () => { if (await gpConfirm(`Rebase ${currentBranch} onto ${name}?`)) repo && void run('rebase', () => gitService.startRebase(repo!, name)); },
+      });
+    }
+
+    // Manage
+    if (isLocal) {
+      items.push(separator('manage'));
+      items.push({ header: true, label: 'Manage', action: () => undefined });
+      items.push({
+        label: 'Rename branch',
+        action: async () => {
+          const next = await gpPrompt('New branch name', name);
+          if (next && repo) void run('rename branch', () => gitService.renameBranch(repo!, name, next));
+        },
+      });
+      if (!isCurrent) {
+        items.push({
+          label: 'Delete branch',
+          danger: true,
+          action: async () => { if (await gpConfirm(`Delete ${name}?`, true)) repo && void run('delete branch', () => gitService.deleteBranch(repo!, name, false)); },
+        });
+        items.push({
+          label: 'Force delete branch',
+          danger: true,
+          action: async () => { if (await gpConfirm(`Force delete ${name}?`, true)) repo && void run('force delete branch', () => gitService.deleteBranch(repo!, name, true)); },
+        });
+      }
+    }
+
+    items.push(separator('copy'));
+    items.push({ label: 'Copy branch name', action: () => void navigator.clipboard.writeText(name) });
+    return items;
+  };
+
+  useEffect(() => {
+    if (!listEl) return;
+    const update = () => setViewportHeight(listEl.clientHeight || 600);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(listEl);
+    return () => ro.disconnect();
+  }, [listEl]);
+
+  useEffect(() => {
+    if (!listEl || !selectedCommit) return;
+    if (lastAutoScrolledHashRef.current === selectedCommit.hash) return;
+    const idx = visibleRows.findIndex(row => row.commit.hash === selectedCommit.hash);
+    if (idx === -1) return;
+    lastAutoScrolledHashRef.current = selectedCommit.hash;
+    const rowTop = idx * ROW_H + (changedCount > 0 ? ROW_H : 0);
+    const rowBottom = rowTop + ROW_H;
+    if (rowTop < listEl.scrollTop) listEl.scrollTop = rowTop;
+    else if (rowBottom > listEl.scrollTop + listEl.clientHeight) listEl.scrollTop = rowBottom - listEl.clientHeight;
+  }, [selectedCommit?.hash, visibleRows, listEl, changedCount]);
+
+  if (history.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-slate-500">
+        Open a repository to see commit history
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2"><input className="input h-7 text-xs" value={filters.keyword ?? ''} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value || undefined }))} placeholder="Commit message keyword (git --grep)" /><input className="input h-7 text-xs" value={filters.filePath ?? ''} onChange={e => setFilters(f => ({ ...f, filePath: e.target.value || undefined }))} placeholder="File path filter (e.g. src/App.tsx)" /></div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-pilot-bg">
+      {/* Filter bar */}
+      <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-1.5 border-b border-pilot-line bg-[#161b22] px-2">
+        {/* HISTORY label */}
+        <div className="flex shrink-0 items-center gap-1.5 border-r border-pilot-line pr-2.5">
+          <GitCommitHorizontal size={13} className="text-slate-500" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">History</span>
+          <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[9px] font-bold text-slate-400">{visibleRows.length}</span>
+        </div>
+
+        {/* Branch filter */}
+        <div className="relative w-32 shrink-0">
+          <select
+            className="w-full cursor-pointer appearance-none rounded border border-[#30363d] bg-[#0d1117] py-1 pl-2 pr-5 text-[11px] text-slate-200 outline-none focus:border-pilot-blue"
+            value={filters.branch ?? ''}
+            onChange={e => setFilters(f => ({ ...f, branch: e.target.value || undefined }))}
+          >
+            <option value="">all branches</option>
+            {refs.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <ChevronDown size={10} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-slate-500" />
+        </div>
+
+        {/* Author filter */}
+        <div className="relative hidden w-28 shrink-0 xl:block">
+          <select
+            className="w-full cursor-pointer appearance-none rounded border border-[#30363d] bg-[#0d1117] py-1 pl-2 pr-5 text-[11px] text-slate-200 outline-none focus:border-pilot-blue"
+            value={filters.author ?? ''}
+            onChange={e => setFilters(f => ({ ...f, author: e.target.value || undefined }))}
+          >
+            <option value="">all authors</option>
+            {authors.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <ChevronDown size={10} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-slate-500" />
+        </div>
+
+        {/* Search */}
+        <div className="relative min-w-0 flex-1">
+          <Search size={11} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            className="w-full rounded border border-[#30363d] bg-[#0d1117] py-1 pl-6 pr-2 text-[11px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-pilot-blue"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+          />
+        </div>
+
+        {/* Actions */}
+        <button
+          className={`icon-btn h-7 shrink-0 gap-1 ${fetching ? 'opacity-60' : ''}`}
+          onClick={() => void handleFetch()} disabled={fetching || !repo} title="Fetch all remotes"
+        >
+          <RefreshCw size={12} className={fetching ? 'animate-spin' : ''} />
+          <span className="hidden lg:inline">Fetch</span>
+        </button>
+        <button
+          className={`icon-btn h-7 shrink-0 gap-1 ${dimMerges ? 'accent' : ''}`}
+          onClick={() => setDimMerges(v => !v)}
+          title={dimMerges ? 'Show merge commits' : 'Dim merge commits'}
+        >
+          <EyeOff size={12} />
+          <span className="hidden lg:inline">Merges</span>
+        </button>
+        {hasFilter && (
+          <button className="icon-btn h-7 shrink-0" onClick={clear} title="Clear filters"><X size={12} /></button>
+        )}
+      </div>
+
+      {/* Column headers */}
+      <div className="relative flex shrink-0 select-none border-b border-pilot-line bg-pilot-bg text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        {effectiveBranchW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveBranchW }}>Branch</div>}
+        {effectiveGraphW > 0 && <div className="shrink-0" style={{ width: effectiveGraphW }} />}
+        <div className="min-w-0 flex-1 px-2 py-1.5">Commit</div>
+        {effectiveChangesW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveChangesW }}>Changes</div>}
+        {effectiveAuthorW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveAuthorW }}>Author</div>}
+        {effectiveDateW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveDateW }}>Date</div>}
+        {effectiveShaW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveShaW }}>SHA</div>}
+        <div className="relative shrink-0">
+          <button
+            className={`flex h-full items-center px-2 py-1.5 hover:text-slate-400 ${configOpen ? 'text-sky-400' : ''}`}
+            title="Configure columns"
+            onClick={() => setConfigOpen(v => !v)}
+          >
+            <Settings2 size={11} />
+          </button>
+          {configOpen && (
+              <ColumnConfigMenu
+                onClose={closeConfig}
+                filters={filters}
+                onFiltersChange={f => setFilters(f)}
+                hasActiveFilter={Boolean(filters.since || filters.until || filters.keyword || filters.filePath)}
+                onClearFilters={() => setFilters({})}
+                minDate={repoDateRange?.min}
+                maxDate={repoDateRange?.max}
+              />
+            )}
+        </div>
+      </div>
+
+      {/* Commit list */}
+      <div
+        ref={listRefCb}
+        className="min-h-0 flex-1 select-none overflow-auto [overflow-anchor:none]"
+        onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
+      >
+        {/* Working Directory row — GitKraken WIP style */}
+        {changedCount > 0 && (
+          <button
+            type="button"
+            className="flex w-full select-none items-center border-b border-pilot-line/60 text-left transition-colors hover:bg-[#21262d]/60"
+            style={{ height: wdRowH, background: 'linear-gradient(90deg, #1c2128 0%, #0d1117 100%)' }}
+            onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
+          >
+            {/* Branch placeholder */}
+            {effectiveBranchW > 0 && <div className="shrink-0" style={{ width: effectiveBranchW }} />}
+            {/* WIP dot — white diamond-ish */}
+            {effectiveGraphW > 0 && (
+              <div className="shrink-0 overflow-hidden" style={{ width: effectiveGraphW }}>
+                <svg width={GRAPH_W} height={wdRowH} className="block overflow-hidden">
+                  <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R + 3} fill="#ffffff" opacity={0.08} />
+                  <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R} fill="#e2e8f0" />
+                  <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R - 1.5} fill="#0d1117" />
+                  <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R - 1.5} fill="#e2e8f0" opacity={0.4} />
+                </svg>
+              </div>
+            )}
+
+            {/* WIP label */}
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-1.5">
+              <span className="shrink-0 font-mono text-[11px] font-semibold text-slate-400">// WIP</span>
+              <span className="flex shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+                <Pencil size={9} />
+                {changedCount}
+              </span>
+              <span className="truncate text-xs text-slate-500">
+                {changedCount} file{changedCount === 1 ? '' : 's'} modified
+              </span>
+            </div>
+
+            {/* Changes placeholder */}
+            {effectiveChangesW > 0 && <div className="shrink-0" style={{ width: effectiveChangesW }} />}
+
+            {/* Author: no avatar for WIP */}
+            {effectiveAuthorW > 0 && (
+              <div className="shrink-0 px-2 text-[11px] text-slate-600" style={{ width: effectiveAuthorW }}>
+                working tree
+              </div>
+            )}
+            {effectiveDateW > 0 && (
+              <div className="shrink-0 px-2 text-[10px] text-slate-600" style={{ width: effectiveDateW }}>now</div>
+            )}
+            {effectiveShaW > 0 && (
+              <div className="shrink-0 px-2 font-mono text-[10px] text-slate-600" style={{ width: effectiveShaW }}>HEAD</div>
+            )}
+          </button>
+        )}
+
+        {/* Virtual scrolled commit rows */}
+        <div className="relative" style={{ height: totalListHeight }}>
+          {/* Shared graph SVG layer — renders all lane lines/nodes without per-row clipping */}
+          {effectiveGraphW > 0 && <GraphLayer rows={renderedRows} startIndex={startIndex} laneLabels={laneLabels} activeLane={activeLane} left={effectiveBranchW} graphColW={effectiveGraphW} />}
+
+          {renderedRows.map((row, i) => {
+            const index = startIndex + i;
+            const selected = Boolean(selectedCommit?.hash && selectedCommit.hash === commitRevision(row.commit));
+            const dimmed = dimMerges && !selected && isMergeCommit(row.commit);
+            return (
+              <div
+                key={`${row.commit.hash || row.commit.shortHash}-${index}`}
+                className="absolute left-0 right-0"
+                style={{ top: index * ROW_H, height: ROW_H }}
+              >
+                <GraphRow
+                  row={row}
+                  selected={selected}
+                  dimmed={dimmed}
+                  maxTotal={maxTotal}
+                  isActiveLane={activeLane < 0 || (row.graph?.lane ?? -1) === activeLane}
+                  onClick={() => {
+                    void selectCommit(row.commit);
+                    useGitStore.setState({ rightPanelTab: 'review' });
+                  }}
+                  onContextMenu={event => {
+                    event.preventDefault();
+                    void selectCommit(row.commit);
+                    useGitStore.setState({ rightPanelTab: 'review' });
+                    setMenu({ x: event.clientX, y: event.clientY, commit: row.commit });
+                  }}
+                  onBranchContextMenu={(e, name, local, remote) => {
+                    e.stopPropagation();
+                    setBranchMenu({ x: e.clientX, y: e.clientY, name, local, remote });
+                  }}
+                  branchColW={effectiveBranchW}
+                  graphColW={effectiveGraphW}
+                  changesW={effectiveChangesW}
+                  authorW={effectiveAuthorW}
+                  dateW={effectiveDateW}
+                  shaW={effectiveShaW}
+                  smartBranch={smartBranch}
+                  currentBranch={currentBranch}
+                />
+              </div>
+            );
+          })}
+          {visibleRows.length === 0 && (
+            <div className="p-6 text-center text-sm text-slate-500">No commits match the current filters.</div>
+          )}
+          {hasMoreCommits && (
+            <div
+              className="absolute left-0 right-0 flex items-center justify-center border-t border-pilot-line"
+              style={{ top: visibleRows.length * ROW_H, height: 32 }}
+            >
+              <span className="text-[10px] text-slate-600 select-none">loading…</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          title={menu.commit.shortHash}
+          onClose={() => setMenu(undefined)}
+          items={commitMenuItems(menu.commit)}
+        />
+      )}
+      {branchMenu && (
+        <ContextMenu
+          x={branchMenu.x}
+          y={branchMenu.y}
+          title={branchMenu.name}
+          onClose={() => setBranchMenu(undefined)}
+          items={branchMenuItems(branchMenu.name, branchMenu.local, branchMenu.remote)}
+        />
+      )}
     </div>
-    <div className="min-h-0 flex-1 overflow-auto">
-      {visibleRows.map(row => <GraphRow key={row.commit.hash} row={row} selected={selectedCommit?.hash === row.commit.hash} dimmed={false} rowRef={selectedCommit?.hash === row.commit.hash ? node => { selectedRef.current = node; } : undefined} onClick={() => void selectCommit(row.commit)} />)}
-      {visibleRows.length === 0 && <div className="p-6 text-center text-sm text-slate-500">No commits match the current GitKraken-style filters.</div>}
-      <div className="border-t border-pilot-line p-3 text-center"><button className="btn" onClick={() => void loadHistory(filters, historyLimit + 500)}>Load 500 more commits</button></div>
-    </div>
-  </div>;
+  );
 }

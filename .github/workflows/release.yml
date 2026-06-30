@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: '--target x86_64-pc-windows-msvc'
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+          - platform: ubuntu-22.04
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect pre-release
+        id: meta
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          # MSI requires numeric-only pre-release — strip suffix for bundle version
+          APP_VERSION="${VERSION%%-*}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
+          if [[ "$TAG" =~ -(alpha|beta|rc) ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync version into tauri.conf.json
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'src-tauri/tauri.conf.json';
+            const c = JSON.parse(fs.readFileSync(p, 'utf8'));
+            c.version = '${{ steps.meta.outputs.app_version }}';
+            fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');
+          "
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install frontend deps
+        run: npm install
+
+      - name: Build & release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'GitPilot ${{ github.ref_name }}'
+          releaseBody: |
+            See the assets below to download and install this version of GitPilot.
+          releaseDraft: false
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          args: ${{ matrix.args }}
+          includeUpdaterJson: true
+
+      # For pre-releases: push latest.json to beta-channel so beta users get update notifications.
+      - name: Publish to beta-channel (pre-release only, one runner)
+        if: steps.meta.outputs.prerelease == 'true' && matrix.platform == 'ubuntu-22.04'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release download ${{ github.ref_name }} --pattern latest.json --output /tmp/latest.json
+
+          if gh release view beta-channel &>/dev/null; then
+            gh release upload beta-channel /tmp/latest.json --clobber
+          else
+            gh release create beta-channel /tmp/latest.json \
+              --title "Beta Channel (auto-updated)" \
+              --notes "This release is automatically updated to the latest pre-release build. Do not install manually — use the in-app update system." \
+              --prerelease
+          fi

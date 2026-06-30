@@ -31,6 +31,10 @@ pub fn fetch(repo_path: String, remote: String) -> Result<GitCommandOutput, GitE
     git_service::git_checked(&repo_path, &["fetch", &remote])
 }
 #[tauri::command]
+pub fn fetch_all(repo_path: String) -> Result<GitCommandOutput, GitError> {
+    git_service::git_checked(&repo_path, &["fetch", "--all", "--prune", "--tags"])
+}
+#[tauri::command]
 pub fn pull(repo_path: String) -> Result<GitCommandOutput, GitError> {
     git_service::git_checked(&repo_path, &["pull"])
 }
