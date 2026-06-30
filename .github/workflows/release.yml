@@ -33,7 +33,10 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
+          # MSI requires numeric-only pre-release — strip suffix for bundle version
+          APP_VERSION="${VERSION%%-*}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
           if [[ "$TAG" =~ -(alpha|beta|rc) ]]; then
             echo "prerelease=true" >> $GITHUB_OUTPUT
           else
@@ -47,7 +50,7 @@ jobs:
             const fs = require('fs');
             const p = 'src-tauri/tauri.conf.json';
             const c = JSON.parse(fs.readFileSync(p, 'utf8'));
-            c.version = '${{ steps.meta.outputs.version }}';
+            c.version = '${{ steps.meta.outputs.app_version }}';
             fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');
           "
 
