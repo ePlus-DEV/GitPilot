@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Cloud, GitBranch, Monitor, Search } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
+import { gpPrompt, gpConfirm } from '../common/Dialog';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import type { BranchInfo } from '../../types/git';
 
 export function BranchSwitcher() {
@@ -11,6 +13,7 @@ export function BranchSwitcher() {
   const run = useGitStore(s => s.run);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const branch = status.currentBranch || repo?.currentBranch || 'no branch';
@@ -41,12 +44,74 @@ export function BranchSwitcher() {
     setSearch('');
   };
 
+  const branchMenuItems = (): ContextMenuItem[] => [
+    {
+      label: 'Pull',
+      action: () => { if (repo) void run('pull', () => gitService.pull(repo.path)); },
+    },
+    {
+      label: 'Push',
+      action: () => { if (repo) void run('push', () => gitService.push(repo.path)); },
+    },
+    { label: 'sep1', separator: true, action: () => undefined },
+    {
+      label: `Rename "${branch}"`,
+      action: async () => {
+        if (!repo) return;
+        const newName = await gpPrompt('New branch name', branch);
+        if (!newName || newName === branch) return;
+        void run('rename branch', () => gitService.renameBranch(repo.path, branch, newName));
+      },
+    },
+    {
+      label: `Delete "${branch}"`,
+      danger: true,
+      action: async () => {
+        if (!repo) return;
+        const ok = await gpConfirm(`Delete branch "${branch}"? This cannot be undone.`, true);
+        if (!ok) return;
+        void run('delete branch', () => gitService.deleteBranch(repo.path, branch, false));
+      },
+    },
+    { label: 'sep2', separator: true, action: () => undefined },
+    {
+      label: 'Copy branch name',
+      action: () => {
+        void navigator.clipboard.writeText(branch).then(() =>
+          useGitStore.getState().log(`Copied: ${branch}`)
+        );
+      },
+    },
+    { label: 'sep3', separator: true, action: () => undefined },
+    {
+      label: 'Create tag here',
+      action: async () => {
+        if (!repo) return;
+        const name = await gpPrompt('Tag name');
+        if (!name) return;
+        void run('create tag', () => gitService.createLightweightTag(repo.path, name));
+      },
+    },
+    {
+      label: 'Create annotated tag here',
+      action: async () => {
+        if (!repo) return;
+        const name = await gpPrompt('Tag name');
+        if (!name) return;
+        const msg = await gpPrompt('Tag message');
+        if (!msg) return;
+        void run('create annotated tag', () => gitService.createAnnotatedTag(repo.path, name, msg));
+      },
+    },
+  ];
+
   if (!repo) return null;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0">
       <button
         onClick={() => setOpen(v => !v)}
+        onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
         className="flex items-center gap-1.5 rounded border border-pilot-line bg-[#21262d] px-2.5 py-1 text-xs transition-colors hover:border-[#484f58]"
         title={branch}
       >
@@ -96,6 +161,15 @@ export function BranchSwitcher() {
             )}
           </div>
         </div>
+      )}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          title={branch}
+          items={branchMenuItems()}
+          onClose={() => setCtxMenu(null)}
+        />
       )}
     </div>
   );

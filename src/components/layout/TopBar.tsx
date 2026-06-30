@@ -66,11 +66,9 @@ export function TopBar() {
         </span>
       </div>
 
-      {/* Repo + Branch — grows, truncates gracefully */}
-      <div className="flex min-w-0 flex-1 items-center">
-        <RepoSwitcher />
-        {repo && <BranchSwitcher />}
-      </div>
+      {/* Repo + Branch — shrink-0, natural width */}
+      <RepoSwitcher />
+      {repo && <BranchSwitcher />}
 
       {/* Divider */}
       <div className="mx-2 h-6 w-px shrink-0 bg-[#30363d]" />
@@ -105,6 +103,8 @@ export function TopBar() {
           <Btn icon={<Terminal size={15} />} label="Terminal" disabled={!repo} title="Open in terminal" onClick={openTerminal} />
         </div>
       )}
+
+      <div className="flex-1" />
 
       {/* Right: Search + Settings */}
       <div className="flex shrink-0 items-center gap-0.5">
