@@ -120,7 +120,7 @@ export function App() {
     });
 
     on('menu://about', () => {
-      useGitStore.setState({ settingsInitialTab: 'about', settingsOpen: true });
+      useGitStore.setState({ settingsTab: 'about', settingsOpen: true });
     });
 
     on('menu://open_terminal', () => {
@@ -134,7 +134,7 @@ export function App() {
     });
 
     on('menu://preferences', () => {
-      useGitStore.setState({ settingsOpen: true });
+      useGitStore.setState({ settingsOpen: true, settingsTab: 'general' });
     });
 
     on('menu://refresh', () => {

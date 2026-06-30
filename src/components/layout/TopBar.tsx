@@ -82,7 +82,7 @@ export function TopBar() {
         </div>
       )}
 
-      <button className="icon-btn h-8 w-8 justify-center p-0" title="Settings" onClick={() => useGitStore.setState({ settingsOpen: true })}>
+      <button className="icon-btn h-8 w-8 justify-center p-0" title="Settings" onClick={() => useGitStore.setState({ settingsOpen: true, settingsTab: 'general' })}>
         <Settings size={14} />
       </button>
     </div>

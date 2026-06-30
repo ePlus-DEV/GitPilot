@@ -1,4 +1,4 @@
-import { FolderOpen } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useGitStore } from '../../store/gitStore';
 
@@ -28,13 +28,13 @@ export function RepoTabs() {
             className={`relative flex h-[26px] items-center gap-1.5 rounded-t-md px-3 text-[11px] font-medium transition-colors select-none ${
               isActive
                 ? 'bg-[#161b22] text-slate-200 border border-b-0 border-pilot-line'
-                : 'text-slate-600 hover:text-slate-400'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {isActive && (
               <span className="absolute bottom-0 left-0 right-0 h-px bg-[#161b22]" />
             )}
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? 'bg-pilot-blue' : 'bg-slate-700'}`} />
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? 'bg-pilot-blue' : 'bg-slate-500'}`} />
             {name}
           </button>
         );
@@ -42,9 +42,9 @@ export function RepoTabs() {
       <button
         onClick={() => void pick()}
         title="Open repository"
-        className="ml-1 flex h-[22px] w-[22px] shrink-0 items-center justify-center self-center rounded text-slate-700 transition-colors hover:bg-[#161b22] hover:text-slate-400"
+        className="ml-1 flex h-[22px] w-[22px] shrink-0 items-center justify-center self-center rounded text-slate-500 transition-colors hover:bg-[#161b22] hover:text-slate-300"
       >
-        <FolderOpen size={12} />
+        <Plus size={13} />
       </button>
     </div>
   );

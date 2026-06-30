@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
-import { Bot, ChevronRight, Clock, GitBranch, Info, Settings, Terminal, X } from 'lucide-react';
+import { Bot, ChevronRight, GitBranch, Info, Settings, Terminal, X } from 'lucide-react';
 import { useGitStore, startAutoFetch } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import type { Settings as SettingsType } from '../../types/git';
@@ -48,8 +48,8 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 export function SettingsPanel() {
   const settings = useGitStore(s => s.settings);
-  const initialTab = useGitStore(s => s.settingsInitialTab);
-  const [tab, setTab] = useState<Tab>((initialTab as Tab) ?? 'general');
+  const tab = useGitStore(s => s.settingsTab) as Tab;
+  const setTab = (t: Tab) => useGitStore.setState({ settingsTab: t });
   const [version, setVersion] = useState('');
 
   useEffect(() => { getVersion().then(setVersion); }, []);
@@ -135,18 +135,15 @@ export function SettingsPanel() {
                   label="Auto-Fetch Interval"
                   hint="Automatically fetch all remotes in the background."
                 >
-                  <div className="relative">
-                    <Clock size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600" />
-                    <select
-                      className="input h-9 w-full pl-8 text-sm"
-                      value={settings.autoFetchInterval ?? 0}
-                      onChange={e => set('autoFetchInterval', Number(e.target.value))}
-                    >
-                      {AUTO_FETCH_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <select
+                    className="input h-9 w-full text-sm"
+                    value={settings.autoFetchInterval ?? 0}
+                    onChange={e => set('autoFetchInterval', Number(e.target.value))}
+                  >
+                    {AUTO_FETCH_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
                 </FieldRow>
 
                 <SectionTitle>Defaults</SectionTitle>
