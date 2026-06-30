@@ -1,5 +1,5 @@
 import { PatchDiff } from '@pierre/diffs/react';
-import { Columns2, Maximize2, Minimize2, Rows3 } from 'lucide-react';
+import { Columns2, Maximize2, Minimize2, Rows3, X } from 'lucide-react';
 import { useState } from 'react';
 import { useGitStore } from '../../store/gitStore';
 
@@ -69,6 +69,13 @@ export function DiffViewer() {
         >
           {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           <span>{expanded ? 'Exit' : 'Full'}</span>
+        </button>
+        <button
+          className="icon-btn shrink-0"
+          title="Close diff"
+          onClick={() => useGitStore.setState({ diff: undefined })}
+        >
+          <X size={13} />
         </button>
       </div>
     </div>

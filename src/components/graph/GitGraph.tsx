@@ -274,7 +274,11 @@ function ExpandedBadge({ b }: { b: BadgeHover }) {
   );
 }
 
-function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
+function BranchCell({ row, selected, onBranchContextMenu }: {
+  row: RowData;
+  selected: boolean;
+  onBranchContextMenu?: (e: ReactMouseEvent, name: string, local: boolean, remote: boolean) => void;
+}) {
   const laneColor = row.graph
     ? LANE_COLORS[row.graph.colorIndex % LANE_COLORS.length]
     : LANE_COLORS[0];
@@ -366,6 +370,7 @@ function BranchCell({ row, selected }: { row: RowData; selected: boolean }) {
               className="flex min-w-0 cursor-default items-center gap-1 rounded px-1.5 leading-[19px] text-[12px] font-semibold"
               style={{ maxWidth: badgeMaxW, background: bg, color: fg, border: bdr }}
               onMouseEnter={e => onEnter(e, g.name, { local: g.local, remote: g.remote }, bg, fg, bdr)}
+              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBranchContextMenu?.(e, g.name, g.local, g.remote); }}
             >
               <span className="min-w-0 truncate">{g.displayName}</span>
               {g.local && <Monitor size={10} className="shrink-0 opacity-80" />}
@@ -406,6 +411,7 @@ const GraphRow = memo(function GraphRow({
   isActiveLane,
   onClick,
   onContextMenu,
+  onBranchContextMenu,
 }: {
   row: RowData;
   selected: boolean;
@@ -414,6 +420,7 @@ const GraphRow = memo(function GraphRow({
   isActiveLane: boolean;
   onClick: () => void;
   onContextMenu: (event: ReactMouseEvent) => void;
+  onBranchContextMenu?: (e: ReactMouseEvent, name: string, local: boolean, remote: boolean) => void;
 }) {
   const ins = row.commit.insertions ?? 0;
   const del = row.commit.deletions ?? 0;
@@ -437,7 +444,7 @@ const GraphRow = memo(function GraphRow({
       style={{ height: ROW_H, backgroundImage: selected ? undefined : bandGradient }}
     >
       {/* Branch column — leftmost */}
-      <BranchCell row={row} selected={selected} />
+      <BranchCell row={row} selected={selected} onBranchContextMenu={onBranchContextMenu} />
 
       {/* Graph column — empty placeholder; graph rendered in shared GraphLayer above */}
       <div className="shrink-0" style={{ width: GRAPH_COL_W }} />
@@ -511,6 +518,7 @@ export function GitGraph() {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: CommitInfo }>();
+  const [branchMenu, setBranchMenu] = useState<{ x: number; y: number; name: string; local: boolean; remote: boolean }>();
   const listRef = useRef<HTMLDivElement | null>(null);
   const didMountRef = useRef(false);
   const lastAutoScrolledHashRef = useRef<string | undefined>();
@@ -706,6 +714,66 @@ export function GitGraph() {
         },
       },
     ];
+  };
+
+  const branchMenuItems = (name: string, isLocal: boolean, isRemote: boolean): ContextMenuItem[] => {
+    const isCurrent = name === currentBranch;
+    const items: ContextMenuItem[] = [];
+
+    // Switch
+    if (isCurrent) {
+      items.push({ label: `✓ ${name}`, disabled: true, action: () => undefined });
+    } else if (isLocal) {
+      items.push({ header: true, label: 'Switch', action: () => undefined });
+      items.push({ label: `Checkout ${name}`, action: () => repo && void run('checkout branch', () => gitService.checkoutBranch(repo!, name)) });
+    } else if (isRemote) {
+      const local = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+      items.push({ header: true, label: 'Switch', action: () => undefined });
+      items.push({ label: `Checkout ${local} ← ${name}`, action: () => repo && void run('checkout branch', () => gitService.checkoutBranch(repo!, local)) });
+    }
+
+    // Actions on current branch using this branch
+    if (isLocal && !isCurrent) {
+      items.push(separator('branch-actions'));
+      items.push({ header: true, label: 'Actions', action: () => undefined });
+      items.push({
+        label: `Merge ${name} → ${currentBranch}`,
+        action: () => { if (confirm(`Merge ${name} into ${currentBranch}?`)) repo && void run('merge branch', () => gitService.mergeBranch(repo!, name)); },
+      });
+      items.push({
+        label: `Rebase ${currentBranch} onto ${name}`,
+        action: () => { if (confirm(`Rebase ${currentBranch} onto ${name}?`)) repo && void run('rebase', () => gitService.startRebase(repo!, name)); },
+      });
+    }
+
+    // Manage
+    if (isLocal) {
+      items.push(separator('manage'));
+      items.push({ header: true, label: 'Manage', action: () => undefined });
+      items.push({
+        label: 'Rename branch',
+        action: () => {
+          const next = prompt('New branch name', name)?.trim();
+          if (next && repo) void run('rename branch', () => gitService.renameBranch(repo!, name, next));
+        },
+      });
+      if (!isCurrent) {
+        items.push({
+          label: 'Delete branch',
+          danger: true,
+          action: () => { if (confirm(`Delete ${name}?`)) repo && void run('delete branch', () => gitService.deleteBranch(repo!, name, false)); },
+        });
+        items.push({
+          label: 'Force delete branch',
+          danger: true,
+          action: () => { if (confirm(`Force delete ${name}?`)) repo && void run('force delete branch', () => gitService.deleteBranch(repo!, name, true)); },
+        });
+      }
+    }
+
+    items.push(separator('copy'));
+    items.push({ label: 'Copy branch name', action: () => void navigator.clipboard.writeText(name) });
+    return items;
   };
 
   useEffect(() => {
@@ -931,6 +999,10 @@ export function GitGraph() {
                     useGitStore.setState({ rightPanelTab: 'review' });
                     setMenu({ x: event.clientX, y: event.clientY, commit: row.commit });
                   }}
+                  onBranchContextMenu={(e, name, local, remote) => {
+                    e.stopPropagation();
+                    setBranchMenu({ x: e.clientX, y: e.clientY, name, local, remote });
+                  }}
                 />
               </div>
             );
@@ -956,6 +1028,15 @@ export function GitGraph() {
           title={menu.commit.shortHash}
           onClose={() => setMenu(undefined)}
           items={commitMenuItems(menu.commit)}
+        />
+      )}
+      {branchMenu && (
+        <ContextMenu
+          x={branchMenu.x}
+          y={branchMenu.y}
+          title={branchMenu.name}
+          onClose={() => setBranchMenu(undefined)}
+          items={branchMenuItems(branchMenu.name, branchMenu.local, branchMenu.remote)}
         />
       )}
     </div>

@@ -95,12 +95,12 @@ export function CommitDetails() {
         </div>
       </div>
 
-      <div className="min-h-0 min-w-0 flex-1 px-4 py-3">
-        <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-3">
+        <div className="mb-1 flex shrink-0 items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-slate-500">
           <span>Files</span>
           <span>{commitFilesLoading ? '...' : commitFiles.length}</span>
         </div>
-        <div className="max-h-56 min-h-0 space-y-0.5 overflow-auto">
+        <div className="min-h-0 flex-1 space-y-0.5 overflow-auto">
           {commitFilesLoading && <div className="py-1 text-xs text-slate-500">Loading files...</div>}
           {commitFilesError && !commitFilesLoading && <div className="py-1 text-xs text-red-300">{commitFilesError}</div>}
           {!commitFilesLoading && !commitFilesError && commitFiles.length === 0 && <div className="py-1 text-xs text-slate-500">No file list for this commit.</div>}

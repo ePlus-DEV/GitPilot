@@ -6,6 +6,7 @@ export type ContextMenuItem = {
   disabled?: boolean;
   danger?: boolean;
   separator?: boolean;
+  header?: boolean;
 };
 
 type Props = {
@@ -44,6 +45,8 @@ export function ContextMenu({ x, y, title, items, onClose }: Props) {
       {title && <div className="border-b border-pilot-line px-3 py-2 font-semibold text-slate-400">{title}</div>}
       {items.map((item, index) => item.separator ? (
         <div key={`${item.label}-${index}`} className="my-1 border-t border-pilot-line" />
+      ) : item.header ? (
+        <div key={`${item.label}-${index}`} className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{item.label}</div>
       ) : (
         <button
           key={`${item.label}-${index}`}
