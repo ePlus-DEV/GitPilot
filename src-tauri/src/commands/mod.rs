@@ -15,5 +15,6 @@ pub mod staging;
 pub mod stash;
 pub mod status;
 pub mod tag;
+pub mod system;
 pub mod validation;
 pub mod worktree;

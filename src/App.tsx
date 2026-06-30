@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { getVersion } from '@tauri-apps/api/app';
+import { open } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import { useGitStore } from './store/gitStore';
 import { TopBar } from './components/layout/TopBar';
 import { Sidebar } from './components/layout/Sidebar';
@@ -15,6 +19,7 @@ import { AiPanel } from './components/ai/AiPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { WelcomeScreen } from './components/welcome/WelcomeScreen';
 import { RepoTabs } from './components/layout/RepoTabs';
+import { RepoManagementPanel } from './components/layout/RepoManagementPanel';
 import { gitService } from './services/gitService';
 
 export function App() {
@@ -26,6 +31,7 @@ export function App() {
   const showMergePanel = status.conflicted.length > 0 || status.mergeState.isMerging || status.mergeState.isRebasing;
   const aiText = useGitStore(s => s.aiText);
   const settingsOpen = useGitStore(s => s.settingsOpen);
+  const repoMgmtOpen = useGitStore(s => s.repoMgmtOpen);
   const rightPanelTab = useGitStore(s => s.rightPanelTab);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [rightWidth, setRightWidth] = useState(430);
@@ -48,7 +54,87 @@ export function App() {
         void state.run('push', () => gitService.push(state.repo!.path));
     };
     window.addEventListener('keydown', onKey);
-    return () => { cancelled = true; window.removeEventListener('keydown', onKey); };
+
+    // Native menu event handlers
+    const unlistens: (() => void)[] = [];
+    const on = (event: string, handler: () => void) => {
+      listen(event, handler).then(u => unlistens.push(u));
+    };
+
+    on('menu://open_repo', () => {
+      open({ directory: true, multiple: false }).then(p => {
+        if (p && !Array.isArray(p)) void useGitStore.getState().openRepo(p);
+      });
+    });
+
+    on('menu://clone_repo', () => {
+      const url = prompt('Clone URL:')?.trim();
+      if (!url) return;
+      open({ directory: true, multiple: false, title: 'Clone into folder' }).then(async parent => {
+        if (!parent || Array.isArray(parent)) return;
+        const state = useGitStore.getState();
+        const folder = url.split('/').pop()?.replace(/\.git$/, '') ?? 'repo';
+        void state.run('clone', () =>
+          gitService.cloneRepository(url, `${parent}/${folder}`).then(async r => {
+            await gitService.saveRecentRepository(r.path);
+            await state.openRepo(r.path);
+            return r;
+          })
+        );
+      });
+    });
+
+    on('menu://init_repo', () => {
+      open({ directory: true, multiple: false, title: 'Init repo in folder' }).then(async p => {
+        if (!p || Array.isArray(p)) return;
+        const state = useGitStore.getState();
+        void state.run('init', () =>
+          gitService.initRepository(p).then(async r => {
+            await gitService.saveRecentRepository(r.path);
+            await state.openRepo(r.path);
+            return r;
+          })
+        );
+      });
+    });
+
+    on('menu://repo_management', () => {
+      useGitStore.setState({ repoMgmtOpen: true });
+    });
+
+    on('menu://check_update', () => {
+      getVersion().then(current => {
+        alert(`GitPilot v${current}\n\nYou are running the latest version.`);
+      });
+    });
+
+    on('menu://about', () => {
+      useGitStore.setState({ settingsInitialTab: 'about', settingsOpen: true });
+    });
+
+    on('menu://open_terminal', () => {
+      const { repo } = useGitStore.getState();
+      if (repo) void invoke('open_in_terminal', { path: repo.path });
+    });
+
+    on('menu://open_file_manager', () => {
+      const { repo } = useGitStore.getState();
+      if (repo) void invoke('open_in_file_manager', { path: repo.path });
+    });
+
+    on('menu://preferences', () => {
+      useGitStore.setState({ settingsOpen: true });
+    });
+
+    on('menu://refresh', () => {
+      void useGitStore.getState().refresh();
+    });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('keydown', onKey);
+      unlistens.forEach(u => u());
+    };
   }, []);
 
   const startResize = (move: (event: MouseEvent) => void) => (event: ReactMouseEvent) => {
@@ -68,6 +154,7 @@ export function App() {
   return (
     <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
       {settingsOpen && <SettingsPanel />}
+      {repoMgmtOpen && <RepoManagementPanel />}
       <RepoTabs />
       <TopBar />
       {!repo && <WelcomeScreen />}

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getVersion } from '@tauri-apps/api/app';
 import { Bot, ChevronRight, Clock, GitBranch, Info, Settings, Terminal, X } from 'lucide-react';
 import { useGitStore, startAutoFetch } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
@@ -47,7 +48,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 export function SettingsPanel() {
   const settings = useGitStore(s => s.settings);
-  const [tab, setTab] = useState<Tab>('general');
+  const initialTab = useGitStore(s => s.settingsInitialTab);
+  const [tab, setTab] = useState<Tab>((initialTab as Tab) ?? 'general');
+  const [version, setVersion] = useState('');
+
+  useEffect(() => { getVersion().then(setVersion); }, []);
   const [saving, setSaving] = useState(false);
 
   if (!settings) return null;
@@ -228,8 +233,11 @@ export function SettingsPanel() {
                   <span className="font-bold">PILOT</span>
                 </div>
                 <div className="mt-1 text-[11px] uppercase tracking-[0.2em] text-slate-600">Visual Git Client</div>
-                <div className="mt-6 text-xs text-slate-600">Built with Tauri 2 · React 18 · Rust</div>
-                <div className="mt-1 text-[11px] text-slate-700">© 2026 RiverCrane Vietnam</div>
+                <div className="mt-4 rounded-md bg-[#161b22] px-4 py-1.5 text-xs font-mono text-slate-400">
+                  v{version || '…'}
+                </div>
+                <div className="mt-4 text-xs text-slate-600">Built with Tauri 2 · React 18 · Rust</div>
+                <div className="mt-1 text-[11px] text-slate-700">© 2026 - <a href="https://eplus.dev" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-slate-300">ePlus.DEV</a></div>
               </div>
             )}
           </div>
