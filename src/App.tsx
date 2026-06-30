@@ -44,6 +44,12 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
     getVersion().then(v => { if (!cancelled) setAppVersion(v); });
+
+    // Auto-check update on startup — only show dialog if update available
+    import('@tauri-apps/plugin-updater').then(({ check }) =>
+      check().then(u => { if (!cancelled && u) setUpdateOpen(true); }).catch(() => {})
+    );
+
     void gitService.getSettings().then(settings => {
       if (cancelled) return;
       useGitStore.setState({ settings, recent: settings.recentRepositories });
