@@ -44,7 +44,7 @@ body {
   @apply flex items-center justify-between gap-2 rounded px-2 py-1.5 hover:bg-[#21262d];
 }
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar { width: 6px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #14b8a666; }
+::-webkit-scrollbar-thumb { background: #3d444d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #14b8a6; }

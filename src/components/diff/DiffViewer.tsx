@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import Editor from '@monaco-editor/react';
 import {
   ChevronDown, ChevronUp, Columns2, FileText, GitCompare, History, Loader2, Rows3, X,
 } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import type { CommitFile, CommitInfo, GitFileStatus } from '../../types/git';
+
+const LANG_MAP: Record<string, string> = {
+  ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+  rs: 'rust', py: 'python', go: 'go', java: 'java', c: 'c', cpp: 'cpp',
+  cs: 'csharp', rb: 'ruby', php: 'php', json: 'json', yaml: 'yaml', yml: 'yaml',
+  toml: 'toml', md: 'markdown', html: 'html', css: 'css', scss: 'scss', sql: 'sql',
+  sh: 'shell', bash: 'shell', kt: 'kotlin', swift: 'swift', dart: 'dart',
+};
+function getLang(path: string) {
+  return LANG_MAP[path.split('.').pop()?.toLowerCase() ?? ''] ?? 'plaintext';
+}
 
 // ─── Diff parsing ─────────────────────────────────────────────────────────────
 
@@ -116,24 +128,57 @@ export function DiffViewer() {
   const [view, setView] = useState<ViewMode>('diff');
   const [layout, setLayout] = useState<'unified' | 'side'>('unified');
   const [hunkIdx, setHunkIdx] = useState(0);
+  const PAGE = 40;
   const [fileHistory, setFileHistory] = useState<CommitInfo[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyCommit, setHistoryCommit] = useState<CommitInfo | null>(null);
+  const [historyContent, setHistoryContent] = useState<string | null>(null);
+  const [historyContentLoading, setHistoryContentLoading] = useState(false);
   const hunkRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const historyListRef = useRef<HTMLDivElement>(null);
+  const historyLoadingRef = useRef(false);
 
   const hunks = useMemo(() => (diff?.patch ? parsePatch(diff.patch) : []), [diff?.patch]);
 
   useEffect(() => { setHunkIdx(0); setView('diff'); }, [diff?.filePath]);
 
-  useEffect(() => {
-    if (view !== 'history' || !repo || !diff) return;
-    setHistoryLoading(true);
-    setFileHistory([]);
-    gitService.getHistory(repo, 200, { filePath: diff.filePath })
-      .then(setFileHistory)
+  const loadHistoryPage = useCallback((skip: number, replace: boolean) => {
+    if (!repo || !diff) return;
+    historyLoadingRef.current = true;
+    setHistoryLoading(skip === 0);
+    gitService.getHistory(repo, PAGE, { filePath: diff.filePath }, skip)
+      .then(page => {
+        setFileHistory(prev => replace ? page : [...prev, ...page]);
+        setHistoryHasMore(page.length === PAGE);
+      })
       .catch(e => log(String((e as Error).message ?? e)))
-      .finally(() => setHistoryLoading(false));
-  }, [view, diff?.filePath, repo]);
+      .finally(() => { setHistoryLoading(false); historyLoadingRef.current = false; });
+  }, [repo, diff?.filePath]);
+
+  useEffect(() => {
+    if (view !== 'history') return;
+    setFileHistory([]);
+    setHistoryCommit(null);
+    setHistoryContent(null);
+    loadHistoryPage(0, true);
+  }, [view, diff?.filePath]);
+
+  // IntersectionObserver — load more when sentinel scrolls into view inside the list container
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const root = historyListRef.current;
+    if (!sentinel || !root) return;
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && historyHasMore && !historyLoadingRef.current) {
+        loadHistoryPage(fileHistory.length, false);
+      }
+    }, { root, threshold: 0, rootMargin: '0px 0px 120px 0px' });
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [historyHasMore, fileHistory.length, loadHistoryPage]);
 
   const scrollToHunk = useCallback((idx: number) => {
     hunkRefs.current[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -339,59 +384,117 @@ export function DiffViewer() {
     }
 
     if (view === 'history') {
-      if (historyLoading) {
-        return (
-          <div className="flex flex-1 items-center justify-center gap-2 text-xs text-slate-500">
-            <Loader2 size={14} className="animate-spin" /> Loading history…
+      const commitList = (
+        <div className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-pilot-line bg-[#0d1117]">
+          <div className="flex shrink-0 items-center border-b border-pilot-line px-3 py-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              File History
+            </span>
           </div>
-        );
-      }
-      if (fileHistory.length === 0) {
-        return (
-          <div className="flex flex-1 items-center justify-center text-xs text-slate-500">
-            No history found for this file.
-          </div>
-        );
-      }
-      return (
-        <div className="min-h-0 flex-1 overflow-auto bg-[#0d1117]">
-          {fileHistory.map(c => (
-            <button
-              key={c.hash}
-              className="flex w-full items-start gap-3 border-b border-[#21262d] px-4 py-2.5 text-left hover:bg-[#161b22] transition-colors"
-              onClick={() => {
-                if (!repo || !diff) return;
-                const rev = c.hash.trim();
-                gitService.getCommitFileDiff(repo, rev, diff.filePath)
-                  .then(d => { useGitStore.setState({ diff: d }); setView('diff'); })
-                  .catch(e => log(String((e as Error).message ?? e)));
+          {historyLoading ? (
+            <div className="flex flex-1 items-center justify-center gap-2 text-xs text-slate-500">
+              <Loader2 size={13} className="animate-spin" /> Loading…
+            </div>
+          ) : fileHistory.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center text-xs text-slate-500">
+              No history found.
+            </div>
+          ) : (
+            <div ref={historyListRef} className="min-h-0 flex-1 overflow-auto">
+              {fileHistory.map(c => (
+                <button
+                  key={c.hash}
+                  className={`flex w-full flex-col gap-0.5 border-b border-[#21262d] px-3 py-2 text-left transition-colors hover:bg-[#161b22] ${
+                    historyCommit?.hash === c.hash ? 'bg-[#21262d]' : ''
+                  }`}
+                  onClick={() => {
+                    if (!repo || !diff) return;
+                    setHistoryCommit(c);
+                    setHistoryContent(null);
+                    setHistoryContentLoading(true);
+                    gitService.getCommitFileDiff(repo, c.hash.trim(), diff.filePath)
+                      .then(d => setHistoryContent(d.newText || d.oldText || ''))
+                      .catch(e => { log(String((e as Error).message ?? e)); setHistoryContent(''); })
+                      .finally(() => setHistoryContentLoading(false));
+                  }}
+                >
+                  <span className="font-mono text-[10px] text-blue-400">{c.shortHash}</span>
+                  <span className="truncate text-[11px] text-slate-200">{c.message}</span>
+                  <span className="text-[10px] text-slate-500">{c.author} · {c.date}</span>
+                </button>
+              ))}
+              {/* sentinel for infinite scroll — invisible, just a trigger */}
+              <div ref={sentinelRef} className="h-1" />
+              {historyHasMore && (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 size={12} className="animate-spin text-slate-600" />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+
+      const filePreview = (
+        <div className="min-h-0 flex-1 bg-[#0d1117]">
+          {historyContentLoading ? (
+            <div className="flex h-full items-center justify-center gap-2 text-xs text-slate-500">
+              <Loader2 size={13} className="animate-spin" /> Loading…
+            </div>
+          ) : historyContent === null ? (
+            <div className="flex h-full items-center justify-center text-xs text-slate-500">
+              Select a commit to view file content.
+            </div>
+          ) : (
+            <Editor
+              height="100%"
+              theme="vs-dark"
+              language={getLang(diff.filePath)}
+              value={historyContent}
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 12,
+                lineNumbers: 'on',
+                folding: false,
+                wordWrap: 'off',
+                renderWhitespace: 'none',
+                scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
               }}
-            >
-              <span className="shrink-0 font-mono text-[11px] text-blue-400">{c.shortHash}</span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs text-slate-200">{c.message}</div>
-                <div className="mt-0.5 text-[10px] text-slate-500">{c.author} · {c.date}</div>
-              </div>
-            </button>
-          ))}
+            />
+          )}
+        </div>
+      );
+
+      return (
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {commitList}
+          {filePreview}
         </div>
       );
     }
 
     if (view === 'file') {
-      const lines = (diff.newText || diff.oldText || '').split('\n');
       return (
-        <div className="min-h-0 flex-1 overflow-auto bg-[#0d1117] py-1">
-          {lines.map((text, i) => (
-            <div key={i} className="flex min-w-0 leading-5 hover:bg-[#21262d]/40">
-              <span className="w-12 shrink-0 select-none border-r border-[#21262d] pr-2 text-right font-mono text-[10px] text-slate-600">
-                {i + 1}
-              </span>
-              <span className="min-w-0 flex-1 whitespace-pre-wrap break-all px-3 font-mono text-[12px] text-slate-300">
-                {text}
-              </span>
-            </div>
-          ))}
+        <div className="min-h-0 flex-1 bg-[#0d1117]">
+          <Editor
+            height="100%"
+            theme="vs-dark"
+            language={getLang(diff.filePath)}
+            value={diff.newText || diff.oldText || ''}
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fontSize: 12,
+              lineNumbers: 'on',
+              folding: false,
+              wordWrap: 'off',
+              renderWhitespace: 'none',
+              scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
+            }}
+          />
         </div>
       );
     }

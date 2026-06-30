@@ -105,6 +105,7 @@ fn parse_commit_files_output(out: &str) -> Vec<CommitFile> {
 pub fn get_history(
     repo_path: String,
     limit: u32,
+    skip: Option<u32>,
     branch: Option<String>,
     author: Option<String>,
     since: Option<String>,
@@ -114,6 +115,7 @@ pub fn get_history(
 ) -> Result<Vec<CommitInfo>, GitError> {
     let fmt = "%H%x1f%h%x1f%P%x1f%an%x1f%ad%x1f%d%x1f%s";
     let max_count = format!("--max-count={limit}");
+    let skip_arg = skip.filter(|&s| s > 0).map(|s| format!("--skip={s}"));
     let pretty = format!("--pretty=format:{fmt}");
     let author_arg = author
         .filter(|v| !v.trim().is_empty() && v != "all")
@@ -150,6 +152,9 @@ pub fn get_history(
         max_count,
         pretty,
     ];
+    if let Some(skip) = skip_arg {
+        args.push(skip);
+    }
     if let Some(author) = author_arg {
         args.push(author);
     }

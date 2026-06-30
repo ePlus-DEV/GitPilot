@@ -557,6 +557,7 @@ export function GitGraph() {
   const run = useGitStore(s => s.run);
   const log = useGitStore(s => s.log);
   const [fetching, setFetching] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [configOpen, setConfigOpen] = useState(false);
   const closeConfig = useCallback(() => setConfigOpen(false), []);
 
@@ -639,12 +640,22 @@ export function GitGraph() {
   const endIndex = Math.min(visibleRows.length, Math.ceil((scrollTop + viewportHeight) / ROW_H) + OVERSCAN);
   const renderedRows = visibleRows.slice(startIndex, endIndex);
   const wdRowH = changedCount > 0 ? ROW_H : 0;
-  const totalListHeight = visibleRows.length * ROW_H + LOAD_MORE_H;
+  const hasMoreCommits = history.length >= historyLimit;
+  const totalListHeight = visibleRows.length * ROW_H + (hasMoreCommits ? 32 : 0);
 
   const handleFetch = async () => {
     setFetching(true);
     try { await fetchAll(); } finally { setFetching(false); }
   };
+
+  // Auto-load more when scroll near bottom
+  useEffect(() => {
+    if (!hasMoreCommits || loadingMoreRef.current) return;
+    if (scrollTop + viewportHeight * 3 >= visibleRows.length * ROW_H) {
+      loadingMoreRef.current = true;
+      void loadHistory(filters, historyLimit + 500).finally(() => { loadingMoreRef.current = false; });
+    }
+  }, [scrollTop, viewportHeight, visibleRows.length, hasMoreCommits, historyLimit, filters, loadHistory]);
 
   const clear = () => { setSearch(''); setFilters({}); };
   const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
@@ -885,11 +896,11 @@ export function GitGraph() {
           </div>
 
           {/* Filter controls */}
-          <div className="flex flex-1 items-center gap-1.5 px-2 py-1.5">
+          <div className="flex h-10 flex-1 items-center gap-1.5 px-2">
             {/* Branch filter */}
-            <div className="relative">
+            <div className="relative w-36 shrink-0">
               <select
-                className="input h-7 cursor-pointer appearance-none pr-6 text-[11px]"
+                className="input h-7 w-full cursor-pointer appearance-none pr-6 text-[11px]"
                 value={filters.branch ?? ''}
                 onChange={e => setFilters(f => ({ ...f, branch: e.target.value || undefined }))}
               >
@@ -900,9 +911,9 @@ export function GitGraph() {
             </div>
 
             {/* Author filter */}
-            <div className="relative hidden xl:block">
+            <div className="relative hidden w-32 shrink-0 xl:block">
               <select
-                className="input h-7 cursor-pointer appearance-none pr-6 text-[11px]"
+                className="input h-7 w-full cursor-pointer appearance-none pr-6 text-[11px]"
                 value={filters.author ?? ''}
                 onChange={e => setFilters(f => ({ ...f, author: e.target.value || undefined }))}
               >
@@ -914,18 +925,18 @@ export function GitGraph() {
 
             {/* Search */}
             <label className="relative min-w-0 flex-1">
-              <Search size={12} className="pointer-events-none absolute left-2 top-2 text-slate-500" />
+              <Search size={12} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 className="input h-7 w-full pl-7 text-xs"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search commits, SHA, author…"
+                placeholder="Search…"
               />
             </label>
 
             {/* Fetch button */}
             <button
-              className={`icon-btn h-7 gap-1 ${fetching ? 'opacity-60' : ''}`}
+              className={`icon-btn h-7 shrink-0 gap-1 ${fetching ? 'opacity-60' : ''}`}
               onClick={() => void handleFetch()}
               disabled={fetching || !repo}
               title="Fetch all remotes"
@@ -936,7 +947,7 @@ export function GitGraph() {
 
             {/* Dim merges toggle */}
             <button
-              className={`icon-btn h-7 gap-1 ${dimMerges ? 'accent' : ''}`}
+              className={`icon-btn h-7 shrink-0 gap-1 ${dimMerges ? 'accent' : ''}`}
               onClick={() => setDimMerges(v => !v)}
               title={dimMerges ? 'Show merge commits' : 'Dim merge commits'}
             >
@@ -945,7 +956,7 @@ export function GitGraph() {
             </button>
 
             {hasFilter && (
-              <button className="icon-btn h-7" onClick={clear} title="Clear filters">
+              <button className="icon-btn h-7 shrink-0" onClick={clear} title="Clear filters">
                 <X size={12} />
               </button>
             )}
@@ -1093,14 +1104,14 @@ export function GitGraph() {
           {visibleRows.length === 0 && (
             <div className="p-6 text-center text-sm text-slate-500">No commits match the current filters.</div>
           )}
-          <div
-            className="absolute left-0 right-0 border-t border-pilot-line p-3 text-center"
-            style={{ top: visibleRows.length * ROW_H, height: LOAD_MORE_H }}
-          >
-            <button className="btn" onClick={() => void loadHistory(filters, historyLimit + 500)}>
-              Load 500 more commits
-            </button>
-          </div>
+          {hasMoreCommits && (
+            <div
+              className="absolute left-0 right-0 flex items-center justify-center border-t border-pilot-line"
+              style={{ top: visibleRows.length * ROW_H, height: 32 }}
+            >
+              <span className="text-[10px] text-slate-600 select-none">loading…</span>
+            </div>
+          )}
         </div>
       </div>
 
