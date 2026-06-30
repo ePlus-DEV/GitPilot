@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Archive, ArchiveRestore, ArrowDownToLine, GitBranch, GitMerge, RefreshCw, Search, Settings, Terminal, Undo2, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDownToLine, GitBranch, GitMerge, Loader2, Redo2, RefreshCw, Search, Settings, Terminal, Undo2, Upload } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import { GitPilotIcon } from '../common/GitPilotIcon';
@@ -12,6 +12,12 @@ export function TopBar() {
   const repo = useGitStore(s => s.repo);
   const busy = useGitStore(s => s.busy);
   const refreshing = useGitStore(s => s.refreshing);
+  const runningOp = useGitStore(s => s.runningOp);
+  const undoStack = useGitStore(s => s.undoStack);
+  const redoStack = useGitStore(s => s.redoStack);
+  const performUndo = useGitStore(s => s.performUndo);
+  const performRedo = useGitStore(s => s.performRedo);
+  const op = (label: string) => runningOp === label;
   const run = useGitStore(s => s.run);
   const branches = useGitStore(s => s.branches);
   const stashes = useGitStore(s => s.stashes);
@@ -34,13 +40,20 @@ export function TopBar() {
     if (!repo) return;
     const name = await gpPrompt('New branch name');
     if (!name) return;
-    void run('create branch', () => gitService.createBranch(repo.path, name, true));
+    void run('create branch', () => gitService.createBranch(repo.path, name, true), 'full', {
+      undo: () => gitService.deleteBranch(repo.path, name, false),
+      redo: () => gitService.createBranch(repo.path, name, true),
+    });
   };
 
   const createStash = async () => {
     if (!repo) return;
     const msg = (await gpPrompt('Stash message (optional)', '')) ?? '';
-    void run('stash', () => gitService.createStash(repo.path, msg || 'GitPilot stash'));
+    const stashMsg = msg || 'GitPilot stash';
+    void run('stash', () => gitService.createStash(repo.path, stashMsg), 'full', {
+      undo: () => gitService.popStash(repo.path, 'stash@{0}'),
+      redo: () => gitService.createStash(repo.path, stashMsg),
+    });
   };
 
   const popStash = async () => {
@@ -77,26 +90,27 @@ export function TopBar() {
       {/* Action buttons */}
       {repo && (
         <div className="flex shrink-0 items-center gap-0.5">
-          {/* Undo / Redo group */}
-          <Btn icon={<Undo2 size={15} />} label="Undo" disabled={busy} title="Undo last action" onClick={() => p && run('undo', () => gitService.resetToCommit(p, 'HEAD~1', 'soft'))} />
-          <Btn icon={<RefreshCw size={15} className={refreshing ? 'animate-spin text-pilot-blue' : ''} />} label="Redo" disabled={busy} title="Refresh" onClick={() => void useGitStore.getState().refresh()} />
+          {/* Undo / Redo / Refresh */}
+          <Btn icon={<Undo2 size={15} />} label="Undo" loading={op(`undo: ${undoStack[0]?.label ?? ''}`)} disabled={busy || undoStack.length === 0} title={undoStack[0] ? `Undo ${undoStack[0].label}` : 'Nothing to undo'} onClick={() => void performUndo()} />
+          <Btn icon={<Redo2 size={15} />} label="Redo" loading={op(`redo: ${redoStack[0]?.label ?? ''}`)} disabled={busy || redoStack.length === 0} title={redoStack[0] ? `Redo ${redoStack[0].label}` : 'Nothing to redo'} onClick={() => void performRedo()} />
+          <Btn icon={<RefreshCw size={15} />} label="Refresh" loading={refreshing} disabled={busy} title="Refresh" onClick={() => void useGitStore.getState().refresh()} />
 
           <Sep />
 
           {/* Pull / Push */}
-          <Btn icon={<ArrowDownToLine size={15} />} label="Pull" badge={behind || undefined} disabled={busy} title={`Pull${behind ? ` (${behind} behind)` : ''}`} onClick={() => p && run('pull', () => gitService.pull(p))} />
-          <Btn icon={<Upload size={15} />} label="Push" badge={ahead || undefined} disabled={busy} title={`Push${ahead ? ` (${ahead} ahead)` : ''}`} accent onClick={() => p && run('push', () => gitService.push(p))} />
+          <Btn icon={<ArrowDownToLine size={15} />} label="Pull" badge={behind || undefined} loading={op('pull')} disabled={busy} title={`Pull${behind ? ` (${behind} behind)` : ''}`} onClick={() => p && run('pull', () => gitService.pull(p))} />
+          <Btn icon={<Upload size={15} />} label="Push" badge={ahead || undefined} loading={op('push')} disabled={busy} title={`Push${ahead ? ` (${ahead} ahead)` : ''}`} accent onClick={() => p && run('push', () => gitService.push(p))} />
 
           <Sep />
 
           {/* Branch / Merge / Stash / Pop */}
-          <Btn icon={<GitBranch size={15} />} label="Branch" disabled={busy} title="Create new branch" onClick={createBranch} />
-          <Btn icon={<GitMerge size={15} />} label="Merge" disabled={busy} title="Merge branch into current" onClick={mergeBranch} />
+          <Btn icon={<GitBranch size={15} />} label="Branch" loading={op('create branch')} disabled={busy} title="Create new branch" onClick={createBranch} />
+          <Btn icon={<GitMerge size={15} />} label="Merge" loading={op('merge branch')} disabled={busy} title="Merge branch into current" onClick={mergeBranch} />
 
           <Sep />
 
-          <Btn icon={<Archive size={15} />} label="Stash" disabled={busy} title="Stash working changes" onClick={createStash} />
-          <Btn icon={<ArchiveRestore size={15} />} label="Pop" disabled={busy || stashes.length === 0} title="Pop top stash" onClick={popStash} />
+          <Btn icon={<Archive size={15} />} label="Stash" loading={op('stash')} disabled={busy} title="Stash working changes" onClick={createStash} />
+          <Btn icon={<ArchiveRestore size={15} />} label="Pop" loading={op('pop stash')} disabled={busy || stashes.length === 0} title="Pop top stash" onClick={popStash} />
 
           <Sep />
 
@@ -128,7 +142,7 @@ export function TopBar() {
 
 // ── Toolbar button ────────────────────────────────────────────────────────────
 
-function Btn({ icon, label, title, onClick, disabled, accent, badge }: {
+function Btn({ icon, label, title, onClick, disabled, accent, badge, loading }: {
   icon: ReactNode;
   label: string;
   title?: string;
@@ -136,6 +150,7 @@ function Btn({ icon, label, title, onClick, disabled, accent, badge }: {
   disabled?: boolean;
   accent?: boolean;
   badge?: number;
+  loading?: boolean;
 }) {
   return (
     <button
@@ -147,7 +162,7 @@ function Btn({ icon, label, title, onClick, disabled, accent, badge }: {
       onClick={onClick}
       disabled={disabled}
     >
-      {icon}
+      {loading ? <Loader2 size={15} className="animate-spin text-pilot-blue" /> : icon}
       <span className="flex items-center gap-1 text-[9px] font-medium leading-none tracking-wide">
         {label}
         {badge !== undefined && badge > 0 && (

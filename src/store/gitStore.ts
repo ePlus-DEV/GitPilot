@@ -75,20 +75,31 @@ type State = {
   aiText: string;
   busy: boolean;
   refreshing: boolean;
+  runningOp: string | null;
   historyLimit: number;
   historyFilters: HistoryFilters;
   openRepo: (path: string) => Promise<void>;
   closeRepo: () => void;
-  refresh: () => Promise<void>;
+  refresh: (silent?: boolean) => Promise<void>;
   refreshStatus: () => Promise<void>;
   loadHistory: (filters?: HistoryFilters, limit?: number) => Promise<void>;
   loadGraphData: (filters?: HistoryFilters, limit?: number) => Promise<void>;
-  run: (label: string, fn: () => Promise<GitCommandOutput | GitCommandOutput[] | string | unknown>, refreshMode?: RefreshMode) => Promise<void>;
+  run: (label: string, fn: () => Promise<GitCommandOutput | GitCommandOutput[] | string | unknown>, refreshMode?: RefreshMode, undoable?: { undo: () => Promise<unknown>; redo: () => Promise<unknown> }) => Promise<void>;
+  undoStack: UndoEntry[];
+  redoStack: UndoEntry[];
+  performUndo: () => Promise<void>;
+  performRedo: () => Promise<void>;
   fetchAll: () => Promise<void>;
   setSelectedFile: (f: GitFileStatus, cached: boolean) => Promise<void>;
   selectCommit: (c: CommitInfo) => Promise<void>;
   loadConflict: (path: string) => Promise<void>;
   log: (m: string) => void;
+};
+
+type UndoEntry = {
+  label: string;
+  undo: () => Promise<unknown>;
+  redo: () => Promise<unknown>;
 };
 
 const fmt = (r: unknown): string =>
@@ -120,6 +131,9 @@ export const useGitStore = create<State>((set, get) => ({
   aiText: '',
   busy: false,
   refreshing: false,
+  runningOp: null,
+  undoStack: [],
+  redoStack: [],
   historyLimit: 500,
   historyFilters: {},
 
@@ -183,13 +197,15 @@ export const useGitStore = create<State>((set, get) => ({
       aiText: '',
       busy: false,
       historyFilters: {},
+      undoStack: [],
+      redoStack: [],
     });
   },
 
-  refresh: async () => {
+  refresh: async (silent = false) => {
     const repo = get().repo;
     if (!repo) return;
-    set({ busy: true, refreshing: true });
+    set({ busy: true, refreshing: !silent });
     try {
       const filters = get().historyFilters;
       const limit = get().historyLimit;
@@ -255,17 +271,52 @@ export const useGitStore = create<State>((set, get) => ({
     }
   },
 
-  run: async (label, fn, refreshMode = 'full') => {
-    set({ busy: true });
+  run: async (label, fn, refreshMode = 'full', undoable?) => {
+    set({ busy: true, runningOp: label });
     try {
       const r = await fn();
       get().log(`${label}\n${fmt(r)}`);
+      if (undoable) {
+        set(s => ({ undoStack: [{ label, ...undoable }, ...s.undoStack].slice(0, 20), redoStack: [] }));
+      }
       if (refreshMode === 'status') await get().refreshStatus();
-      else if (refreshMode === 'full') await get().refresh();
+      else if (refreshMode === 'full') await get().refresh(true);
     } catch (e) {
       get().log(String((e as Error).message ?? e));
     } finally {
-      set({ busy: false });
+      set({ busy: false, runningOp: null });
+    }
+  },
+
+  performUndo: async () => {
+    const [entry, ...rest] = get().undoStack;
+    if (!entry) return;
+    set({ busy: true, runningOp: `undo: ${entry.label}` });
+    try {
+      const r = await entry.undo();
+      get().log(`Undo: ${entry.label}\n${fmt(r)}`);
+      set(s => ({ undoStack: rest, redoStack: [entry, ...s.redoStack] }));
+      await get().refresh(true);
+    } catch (e) {
+      get().log(String((e as Error).message ?? e));
+    } finally {
+      set({ busy: false, runningOp: null });
+    }
+  },
+
+  performRedo: async () => {
+    const [entry, ...rest] = get().redoStack;
+    if (!entry) return;
+    set({ busy: true, runningOp: `redo: ${entry.label}` });
+    try {
+      const r = await entry.redo();
+      get().log(`Redo: ${entry.label}\n${fmt(r)}`);
+      set(s => ({ redoStack: rest, undoStack: [entry, ...s.undoStack] }));
+      await get().refresh(true);
+    } catch (e) {
+      get().log(String((e as Error).message ?? e));
+    } finally {
+      set({ busy: false, runningOp: null });
     }
   },
 

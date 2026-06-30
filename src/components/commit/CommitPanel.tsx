@@ -16,7 +16,11 @@ export function CommitPanel() {
     if (!repo) return;
     if (!msg.trim()) { log('Commit message required'); return; }
     if (!stagedCount && !amend) { log('No staged files'); return; }
-    void run('commit', () => gitService.commit(repo, msg, amend)).then(() => setMsg(''));
+    const savedMsg = msg;
+    void run('commit', () => gitService.commit(repo, savedMsg, amend), 'full', {
+      undo: () => gitService.resetToCommit(repo, 'HEAD~1', 'soft'),
+      redo: () => gitService.commit(repo, savedMsg, false),
+    }).then(() => setMsg(''));
   }, [amend, log, msg, repo, run, stagedCount]);
 
   useEffect(() => {
