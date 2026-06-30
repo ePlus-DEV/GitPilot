@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "GitPilot",
-  "version": "0.1.0",
   "identifier": "dev.gitpilot.app",
   "build": {
     "beforeDevCommand": "npm run dev",
