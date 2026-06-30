@@ -20,6 +20,8 @@ import { SettingsPanel } from './components/settings/SettingsPanel';
 import { WelcomeScreen } from './components/welcome/WelcomeScreen';
 import { RepoTabs } from './components/layout/RepoTabs';
 import { RepoManagementPanel } from './components/layout/RepoManagementPanel';
+import { GitPilotIcon } from './components/common/GitPilotIcon';
+import { UpdateDialog } from './components/update/UpdateDialog';
 import { gitService } from './services/gitService';
 
 export function App() {
@@ -32,6 +34,8 @@ export function App() {
   const aiText = useGitStore(s => s.aiText);
   const settingsOpen = useGitStore(s => s.settingsOpen);
   const repoMgmtOpen = useGitStore(s => s.repoMgmtOpen);
+  const [appVersion, setAppVersion] = useState('');
+  const [updateOpen, setUpdateOpen] = useState(false);
   const rightPanelTab = useGitStore(s => s.rightPanelTab);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [rightWidth, setRightWidth] = useState(430);
@@ -39,6 +43,7 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
+    getVersion().then(v => { if (!cancelled) setAppVersion(v); });
     void gitService.getSettings().then(settings => {
       if (cancelled) return;
       useGitStore.setState({ settings, recent: settings.recentRepositories });
@@ -103,9 +108,7 @@ export function App() {
     });
 
     on('menu://check_update', () => {
-      getVersion().then(current => {
-        alert(`GitPilot v${current}\n\nYou are running the latest version.`);
-      });
+      setUpdateOpen(true);
     });
 
     on('menu://about', () => {
@@ -155,6 +158,18 @@ export function App() {
     <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
       {settingsOpen && <SettingsPanel />}
       {repoMgmtOpen && <RepoManagementPanel />}
+      {updateOpen && <UpdateDialog onClose={() => setUpdateOpen(false)} />}
+      {appVersion && (
+        <button
+          className="fixed bottom-2 right-3 z-40 flex items-center gap-1.5 rounded border border-[#30363d] bg-[#161b22] px-2 py-0.5 text-[10px] font-mono text-slate-500 transition-colors hover:border-pilot-blue/40 hover:text-slate-300"
+          title="Check for update"
+          onClick={() => setUpdateOpen(true)}
+        >
+          <GitPilotIcon size={13} />
+          <span className="text-slate-600">git</span><span className="font-bold text-slate-400">PILOT</span>
+          <span className="mx-0.5 text-[#30363d]">·</span>v{appVersion}
+        </button>
+      )}
       <RepoTabs />
       <TopBar />
       {!repo && <WelcomeScreen />}
