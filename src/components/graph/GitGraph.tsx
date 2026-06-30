@@ -884,85 +884,70 @@ export function GitGraph() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-pilot-bg">
       {/* Filter bar */}
-      <div className="sticky top-0 z-10 shrink-0 border-b border-pilot-line bg-[#161b22]">
-        <div className="flex items-center gap-0">
-          {/* HISTORY label + count */}
-          <div className="flex shrink-0 items-center gap-2 border-r border-pilot-line px-3 py-2">
-            <GitCommitHorizontal size={13} className="text-slate-500" />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">History</span>
-            <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[9px] font-bold text-slate-300">
-              {visibleRows.length}
-            </span>
-          </div>
-
-          {/* Filter controls */}
-          <div className="flex h-10 flex-1 items-center gap-1.5 px-2">
-            {/* Branch filter */}
-            <div className="relative w-36 shrink-0">
-              <select
-                className="input h-7 w-full cursor-pointer appearance-none pr-6 text-[11px]"
-                value={filters.branch ?? ''}
-                onChange={e => setFilters(f => ({ ...f, branch: e.target.value || undefined }))}
-              >
-                <option value="">all branches</option>
-                {refs.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              <ChevronDown size={10} className="pointer-events-none absolute right-1.5 top-2 text-slate-500" />
-            </div>
-
-            {/* Author filter */}
-            <div className="relative hidden w-32 shrink-0 xl:block">
-              <select
-                className="input h-7 w-full cursor-pointer appearance-none pr-6 text-[11px]"
-                value={filters.author ?? ''}
-                onChange={e => setFilters(f => ({ ...f, author: e.target.value || undefined }))}
-              >
-                <option value="">all authors</option>
-                {authors.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-              <ChevronDown size={10} className="pointer-events-none absolute right-1.5 top-2 text-slate-500" />
-            </div>
-
-            {/* Search */}
-            <label className="relative min-w-0 flex-1">
-              <Search size={12} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                className="input h-7 w-full pl-7 text-xs"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search…"
-              />
-            </label>
-
-            {/* Fetch button */}
-            <button
-              className={`icon-btn h-7 shrink-0 gap-1 ${fetching ? 'opacity-60' : ''}`}
-              onClick={() => void handleFetch()}
-              disabled={fetching || !repo}
-              title="Fetch all remotes"
-            >
-              <RefreshCw size={12} className={fetching ? 'animate-spin' : ''} />
-              <span className="hidden lg:inline">Fetch</span>
-            </button>
-
-            {/* Dim merges toggle */}
-            <button
-              className={`icon-btn h-7 shrink-0 gap-1 ${dimMerges ? 'accent' : ''}`}
-              onClick={() => setDimMerges(v => !v)}
-              title={dimMerges ? 'Show merge commits' : 'Dim merge commits'}
-            >
-              <EyeOff size={12} />
-              <span className="hidden lg:inline">Merges</span>
-            </button>
-
-            {hasFilter && (
-              <button className="icon-btn h-7 shrink-0" onClick={clear} title="Clear filters">
-                <X size={12} />
-              </button>
-            )}
-          </div>
+      <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-1.5 border-b border-pilot-line bg-[#161b22] px-2">
+        {/* HISTORY label */}
+        <div className="flex shrink-0 items-center gap-1.5 border-r border-pilot-line pr-2.5">
+          <GitCommitHorizontal size={13} className="text-slate-500" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">History</span>
+          <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[9px] font-bold text-slate-400">{visibleRows.length}</span>
         </div>
 
+        {/* Branch filter */}
+        <div className="relative w-32 shrink-0">
+          <select
+            className="w-full cursor-pointer appearance-none rounded border border-[#30363d] bg-[#0d1117] py-1 pl-2 pr-5 text-[11px] text-slate-200 outline-none focus:border-pilot-blue"
+            value={filters.branch ?? ''}
+            onChange={e => setFilters(f => ({ ...f, branch: e.target.value || undefined }))}
+          >
+            <option value="">all branches</option>
+            {refs.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <ChevronDown size={10} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-slate-500" />
+        </div>
+
+        {/* Author filter */}
+        <div className="relative hidden w-28 shrink-0 xl:block">
+          <select
+            className="w-full cursor-pointer appearance-none rounded border border-[#30363d] bg-[#0d1117] py-1 pl-2 pr-5 text-[11px] text-slate-200 outline-none focus:border-pilot-blue"
+            value={filters.author ?? ''}
+            onChange={e => setFilters(f => ({ ...f, author: e.target.value || undefined }))}
+          >
+            <option value="">all authors</option>
+            {authors.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <ChevronDown size={10} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-slate-500" />
+        </div>
+
+        {/* Search */}
+        <div className="relative min-w-0 flex-1">
+          <Search size={11} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            className="w-full rounded border border-[#30363d] bg-[#0d1117] py-1 pl-6 pr-2 text-[11px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-pilot-blue"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+          />
+        </div>
+
+        {/* Actions */}
+        <button
+          className={`icon-btn h-7 shrink-0 gap-1 ${fetching ? 'opacity-60' : ''}`}
+          onClick={() => void handleFetch()} disabled={fetching || !repo} title="Fetch all remotes"
+        >
+          <RefreshCw size={12} className={fetching ? 'animate-spin' : ''} />
+          <span className="hidden lg:inline">Fetch</span>
+        </button>
+        <button
+          className={`icon-btn h-7 shrink-0 gap-1 ${dimMerges ? 'accent' : ''}`}
+          onClick={() => setDimMerges(v => !v)}
+          title={dimMerges ? 'Show merge commits' : 'Dim merge commits'}
+        >
+          <EyeOff size={12} />
+          <span className="hidden lg:inline">Merges</span>
+        </button>
+        {hasFilter && (
+          <button className="icon-btn h-7 shrink-0" onClick={clear} title="Clear filters"><X size={12} /></button>
+        )}
       </div>
 
       {/* Column headers */}

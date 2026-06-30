@@ -41,9 +41,11 @@ export function ConsolePanel({ height, onResizeStart }: ConsolePanelProps) {
     >
       {(hasOutput || tab === 'terminal') && (
         <div
-          className="absolute left-0 right-0 top-0 z-10 h-1 cursor-row-resize hover:bg-pilot-blue/60"
+          className="group absolute left-0 right-0 top-0 z-10 flex h-[5px] cursor-row-resize items-center justify-center hover:bg-pilot-blue/20"
           onMouseDown={onResizeStart}
-        />
+        >
+          <div className="h-[3px] w-10 rounded-full bg-[#3d444d] opacity-60 transition-all group-hover:w-16 group-hover:bg-pilot-blue group-hover:opacity-100" />
+        </div>
       )}
 
       {/* Tab bar */}

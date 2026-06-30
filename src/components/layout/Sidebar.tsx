@@ -1,5 +1,5 @@
 import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { Archive, FolderGit2, GitBranch, GitMerge, Globe, Plus, RotateCcw, Tag, Trash2 } from 'lucide-react';
+import { Archive, FolderGit2, GitBranch, GitMerge, Globe, RotateCcw, Search, Tag, Trash2, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
@@ -16,7 +16,6 @@ export function Sidebar() {
   const openRepo = useGitStore(s => s.openRepo);
   const closeRepo = useGitStore(s => s.closeRepo);
   const run = useGitStore(s => s.run);
-  const [newBranch, setNewBranch] = useState('');
   const [branchMenu, setBranchMenu] = useState<{ x: number; y: number; branch: BranchInfo }>();
   const repo = repoInfo?.path;
 
@@ -44,147 +43,53 @@ export function Sidebar() {
       void navigator.clipboard.writeText(value).then(() => useGitStore.getState().log(`${label}: ${value}`)).catch(() => useGitStore.getState().log(value));
     };
     return [
-      {
-        label: 'Checkout branch',
-        action: () => repo && void run('checkout', () => gitService.checkoutBranch(repo, ref)),
-      },
-      {
-        label: `Create worktree from ${ref}`,
-        action: () => {
-          const path = ask('Worktree path', `../worktree-${branchDisplay(branch)}`);
-          if (path && repo) void run('create worktree', () => gitService.createWorktree(repo, path, ref, false));
-        },
-      },
+      { label: 'Checkout branch', action: () => repo && void run('checkout', () => gitService.checkoutBranch(repo, ref)) },
+      { label: `Create worktree from ${ref}`, action: () => { const path = ask('Worktree path', `../worktree-${branchDisplay(branch)}`); if (path && repo) void run('create worktree', () => gitService.createWorktree(repo, path, ref, false)); } },
       separator('branch-actions'),
-      {
-        label: 'Create branch here',
-        action: () => {
-          const name = ask('New branch name', `${branchDisplay(branch)}-copy`);
-          if (name && repo) void run('branch from ref', () => gitService.createBranchFromCommit(repo, name, ref, true));
-        },
-      },
-      {
-        label: 'Merge into current branch',
-        action: () => {
-          if (confirm(`Merge ${ref} into current branch?`)) repo && void run('merge branch', () => gitService.mergeBranch(repo, ref));
-        },
-      },
-      {
-        label: 'Compare with HEAD',
-        action: () => repo && void run('compare branch', () => gitService.compareBranch(repo, ref), 'none'),
-      },
-      {
-        label: `Reset ${currentBranch} to ${ref}: soft`,
-        disabled: branch.current,
-        action: () => {
-          if (confirm(`Soft reset ${currentBranch} to ${ref}?`)) repo && void run('soft reset', () => gitService.resetToCommit(repo, ref, 'soft'));
-        },
-      },
-      {
-        label: `Reset ${currentBranch} to ${ref}: mixed`,
-        disabled: branch.current,
-        action: () => {
-          if (confirm(`Mixed reset ${currentBranch} to ${ref}?`)) repo && void run('mixed reset', () => gitService.resetToCommit(repo, ref, 'mixed'));
-        },
-      },
-      {
-        label: `Reset ${currentBranch} to ${ref}: hard`,
-        danger: true,
-        disabled: branch.current,
-        action: () => {
-          if (confirm(`Hard reset ${currentBranch} to ${ref}? This can discard work.`)) repo && void run('hard reset', () => gitService.resetToCommit(repo, ref, 'hard'));
-        },
-      },
+      { label: 'Create branch here', action: () => { const name = ask('New branch name', `${branchDisplay(branch)}-copy`); if (name && repo) void run('branch from ref', () => gitService.createBranchFromCommit(repo, name, ref, true)); } },
+      { label: 'Merge into current branch', action: () => { if (confirm(`Merge ${ref} into current branch?`)) repo && void run('merge branch', () => gitService.mergeBranch(repo, ref)); } },
+      { label: 'Compare with HEAD', action: () => repo && void run('compare branch', () => gitService.compareBranch(repo, ref), 'none') },
+      { label: `Reset ${currentBranch} to ${ref}: soft`, disabled: branch.current, action: () => { if (confirm(`Soft reset ${currentBranch} to ${ref}?`)) repo && void run('soft reset', () => gitService.resetToCommit(repo, ref, 'soft')); } },
+      { label: `Reset ${currentBranch} to ${ref}: mixed`, disabled: branch.current, action: () => { if (confirm(`Mixed reset ${currentBranch} to ${ref}?`)) repo && void run('mixed reset', () => gitService.resetToCommit(repo, ref, 'mixed')); } },
+      { label: `Reset ${currentBranch} to ${ref}: hard`, danger: true, disabled: branch.current, action: () => { if (confirm(`Hard reset ${currentBranch} to ${ref}? This can discard work.`)) repo && void run('hard reset', () => gitService.resetToCommit(repo, ref, 'hard')); } },
       separator('remote-actions'),
-      {
-        label: 'Rename branch',
-        disabled: !canWriteLocal,
-        action: () => {
-          const next = ask('New branch name', branch.name);
-          if (next && repo) void run('rename branch', () => gitService.renameBranch(repo, branch.name, next));
-        },
-      },
-      {
-        label: `Push to ${remoteName}`,
-        disabled: !canWriteLocal,
-        action: () => repo && void run('push branch', () => gitService.pushNewBranch(repo, remoteName, branch.name)),
-      },
-      {
-        label: `Fetch ${remoteName}`,
-        action: () => repo && void run('fetch', () => gitService.fetch(repo, remoteName)),
-      },
+      { label: 'Rename branch', disabled: !canWriteLocal, action: () => { const next = ask('New branch name', branch.name); if (next && repo) void run('rename branch', () => gitService.renameBranch(repo, branch.name, next)); } },
+      { label: `Push to ${remoteName}`, disabled: !canWriteLocal, action: () => repo && void run('push branch', () => gitService.pushNewBranch(repo, remoteName, branch.name)) },
+      { label: `Fetch ${remoteName}`, action: () => repo && void run('fetch', () => gitService.fetch(repo, remoteName)) },
       separator('delete-actions'),
-      {
-        label: 'Delete branch',
-        danger: true,
-        disabled: !canWriteLocal || branch.current,
-        action: () => {
-          if (confirm(`Delete ${branch.name}?`)) repo && void run('delete branch', () => gitService.deleteBranch(repo, branch.name, false));
-        },
-      },
-      {
-        label: 'Force delete branch',
-        danger: true,
-        disabled: !canWriteLocal || branch.current,
-        action: () => {
-          if (confirm(`Force delete ${branch.name}? This can discard unmerged commits.`)) repo && void run('force delete branch', () => gitService.deleteBranch(repo, branch.name, true));
-        },
-      },
+      { label: 'Delete branch', danger: true, disabled: !canWriteLocal || branch.current, action: () => { if (confirm(`Delete ${branch.name}?`)) repo && void run('delete branch', () => gitService.deleteBranch(repo, branch.name, false)); } },
+      { label: 'Force delete branch', danger: true, disabled: !canWriteLocal || branch.current, action: () => { if (confirm(`Force delete ${branch.name}? This can discard unmerged commits.`)) repo && void run('force delete branch', () => gitService.deleteBranch(repo, branch.name, true)); } },
       separator('copy-actions'),
-      {
-        label: 'Copy branch name',
-        action: () => copyText('Copied branch name', ref),
-      },
+      { label: 'Copy branch name', action: () => copyText('Copied branch name', ref) },
     ];
   };
 
-  return (
-    <aside className="flex h-full w-full shrink-0 flex-col overflow-hidden border-r border-pilot-line bg-[#0d1117]">
-      <div className="flex-1 overflow-auto py-2">
-        <Section icon={<FolderGit2 size={13} />} title="Repositories">
-          {recent.length === 0
-            ? <div className="px-3 py-1 text-[11px] text-slate-500">No recent repos</div>
-            : recent.map(r => (
-              <SidebarRow
-                key={r}
-                label={r.split(/[\\/]/).pop() ?? r}
-                title={r}
-                onClick={() => void openRepo(r)}
-                active={repoInfo?.path === r}
-                onDelete={() => void removeRecent(r)}
-              />
-            ))
-          }
-        </Section>
+  const localBranches = branches.filter(b => !b.remote);
 
-        <Section icon={<GitBranch size={13} />} title="Local Branches" count={branches.filter(b => !b.remote).length}>
-          <div className="flex gap-1 px-2 pb-1">
-            <input
-              className="input h-6 flex-1 px-1.5 text-[11px]"
-              value={newBranch}
-              onChange={e => setNewBranch(e.target.value)}
-              placeholder="new branch..."
-              onKeyDown={e => {
-                if (e.key === 'Enter' && newBranch && repo) {
-                  void run('create branch', () => gitService.createBranch(repo, newBranch, true));
-                  setNewBranch('');
-                }
-              }}
+  return (
+    <aside className="flex h-full w-full flex-col overflow-hidden border-r border-pilot-line bg-[#0d1117]">
+      {/* Repositories — fixed height, no search needed */}
+      <Section icon={<FolderGit2 size={15} />} title="Repositories" count={recent.length} defaultOpen grow={false} color="#64748b">
+        {() => recent.length === 0
+          ? <div className="px-3 py-1 text-[11px] text-slate-500">No recent repos</div>
+          : recent.map(r => (
+            <SidebarRow
+              key={r}
+              label={r.split(/[\\/]/).pop() ?? r}
+              title={r}
+              onClick={() => void openRepo(r)}
+              active={repoInfo?.path === r}
+              onDelete={() => void removeRecent(r)}
             />
-            <button
-              className="icon-btn flex h-6 w-6 items-center justify-center p-0"
-              title="Create branch"
-              disabled={!newBranch || !repo}
-              onClick={() => {
-                if (!newBranch || !repo) return;
-                void run('create branch', () => gitService.createBranch(repo, newBranch, true));
-                setNewBranch('');
-              }}
-            >
-              <Plus size={11} />
-            </button>
-          </div>
-          {branches.filter(b => !b.remote).map(b => (
+          ))
+        }
+      </Section>
+
+      {/* Local Branches — grows to fill remaining space */}
+      <Section icon={<GitBranch size={15} />} title="Local Branches" count={localBranches.length} defaultOpen grow searchable color="#14b8a6">
+        {q => localBranches
+          .filter(b => !q || b.name.toLowerCase().includes(q))
+          .map(b => (
             <SidebarRow
               key={b.name}
               label={b.name}
@@ -192,76 +97,87 @@ export function Sidebar() {
               icon={b.current ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-pilot-blue" /> : undefined}
               onClick={() => repo && void run('checkout', () => gitService.checkoutBranch(repo, b.name))}
               onDelete={() => repo && void run('delete branch', () => gitService.deleteBranch(repo, b.name, false))}
-              onContextMenu={event => {
-                event.preventDefault();
-                setBranchMenu({ x: event.clientX, y: event.clientY, branch: b });
-              }}
-              extra={
-                (b.ahead > 0 || b.behind > 0) ? (
-                  <span className="flex shrink-0 items-center gap-0.5 font-mono text-[9px]">
-                    {b.ahead > 0 && <span className="text-teal-400">↑{b.ahead}</span>}
-                    {b.behind > 0 && <span className="text-orange-400">↓{b.behind}</span>}
-                  </span>
-                ) : undefined
-              }
+              onContextMenu={event => { event.preventDefault(); setBranchMenu({ x: event.clientX, y: event.clientY, branch: b }); }}
+              extra={(b.ahead > 0 || b.behind > 0) ? (
+                <span className="flex shrink-0 items-center gap-0.5 font-mono text-[9px]">
+                  {b.ahead > 0 && <span className="text-teal-400">↑{b.ahead}</span>}
+                  {b.behind > 0 && <span className="text-orange-400">↓{b.behind}</span>}
+                </span>
+              ) : undefined}
             />
-          ))}
-        </Section>
+          ))
+        }
+      </Section>
 
-        <Section icon={<Globe size={13} />} title="Remotes" count={remotes.length}>
-          {remotes.map(r => (
-            <div key={r.name}>
-              <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">{r.name}</div>
-              {branches.filter(b => b.remote && branchRef(b).startsWith(r.name + '/')).map(b => (
-                <SidebarRow
-                  key={b.name}
-                  label={branchDisplay(b, r.name)}
-                  onClick={() => repo && void run('checkout', () => gitService.checkoutBranch(repo, branchRef(b)))}
-                  onContextMenu={event => {
-                    event.preventDefault();
-                    setBranchMenu({ x: event.clientX, y: event.clientY, branch: b });
-                  }}
-                />
-              ))}
-            </div>
-          ))}
-          {remotes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-500">No remotes</div>}
-        </Section>
+      {/* Remotes — bounded height */}
+      <Section icon={<Globe size={15} />} title="Remotes" count={remotes.length} defaultOpen={false} maxHeight={200} searchable color="#818cf8">
+        {q => remotes.length === 0
+          ? <div className="px-3 py-1 text-[11px] text-slate-500">No remotes</div>
+          : remotes.map(r => {
+            const remoteBranches = branches.filter(b => b.remote && branchRef(b).startsWith(r.name + '/'));
+            const filtered = q ? remoteBranches.filter(b => branchDisplay(b, r.name).toLowerCase().includes(q)) : remoteBranches;
+            return (
+              <div key={r.name}>
+                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">{r.name}</div>
+                {filtered.map(b => (
+                  <SidebarRow
+                    key={b.name}
+                    label={branchDisplay(b, r.name)}
+                    onClick={() => repo && void run('checkout', () => gitService.checkoutBranch(repo, branchRef(b)))}
+                    onContextMenu={event => { event.preventDefault(); setBranchMenu({ x: event.clientX, y: event.clientY, branch: b }); }}
+                  />
+                ))}
+              </div>
+            );
+          })
+        }
+      </Section>
 
-        <Section icon={<Tag size={13} />} title="Tags" count={tags.length}>
-          {tags.map(t => (
-            <SidebarRow
-              key={t.name}
-              label={t.name}
-              onDelete={() => repo && void run('delete tag', () => gitService.deleteTag(repo, t.name))}
-            />
-          ))}
-          {tags.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-500">No tags</div>}
-        </Section>
+      {/* Tags — bounded height */}
+      <Section icon={<Tag size={15} />} title="Tags" count={tags.length} defaultOpen={false} maxHeight={180} searchable color="#f59e0b">
+        {q => {
+          const filtered = q ? tags.filter(t => t.name.toLowerCase().includes(q)) : tags;
+          return filtered.length === 0
+            ? <div className="px-3 py-1 text-[11px] text-slate-500">{q ? 'No matches' : 'No tags'}</div>
+            : filtered.map(t => (
+              <SidebarRow
+                key={t.name}
+                label={t.name}
+                onDelete={() => repo && void run('delete tag', () => gitService.deleteTag(repo, t.name))}
+              />
+            ));
+        }}
+      </Section>
 
-        <Section icon={<Archive size={13} />} title="Stashes" count={stashes.length}>
-          <div className="px-2 pb-1">
-            <button
-              className="icon-btn h-6 w-full justify-center text-[11px]"
-              disabled={!repo}
-              onClick={() => repo && void run('stash', () => gitService.createStash(repo, 'GitPilot stash'))}
-            >
-              <Archive size={11} /> Stash changes
-            </button>
-          </div>
-          {stashes.map(st => (
-            <SidebarRow
-              key={st.name}
-              label={st.message || st.name}
-              onAction={() => repo && void run('pop stash', () => gitService.popStash(repo, st.name))}
-              actionIcon={<RotateCcw size={11} />}
-              actionTitle="Pop stash"
-              onDelete={() => repo && void run('drop stash', () => gitService.dropStash(repo, st.name))}
-            />
-          ))}
-          {stashes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-500">No stashes</div>}
-        </Section>
-      </div>
+      {/* Stashes — bounded height */}
+      <Section icon={<Archive size={15} />} title="Stashes" count={stashes.length} defaultOpen={false} maxHeight={180} searchable color="#a78bfa"
+        headerAction={
+          <button
+            className="icon-btn h-6 px-1.5 text-[10px]"
+            disabled={!repo}
+            title="Stash changes"
+            onClick={() => repo && void run('stash', () => gitService.createStash(repo, 'GitPilot stash'))}
+          >
+            <Archive size={11} />
+          </button>
+        }
+      >
+        {q => {
+          const filtered = q ? stashes.filter(s => (s.message || s.name).toLowerCase().includes(q)) : stashes;
+          return filtered.length === 0
+            ? <div className="px-3 py-1 text-[11px] text-slate-500">{q ? 'No matches' : 'No stashes'}</div>
+            : filtered.map(st => (
+              <SidebarRow
+                key={st.name}
+                label={st.message || st.name}
+                onAction={() => repo && void run('pop stash', () => gitService.popStash(repo, st.name))}
+                actionIcon={<RotateCcw size={11} />}
+                actionTitle="Pop stash"
+                onDelete={() => repo && void run('drop stash', () => gitService.dropStash(repo, st.name))}
+              />
+            ));
+        }}
+      </Section>
 
       {(mergeState.isMerging || mergeState.isRebasing) && (
         <div className="shrink-0 border-t border-pilot-line bg-amber-950/40 p-2">
@@ -274,6 +190,7 @@ export function Sidebar() {
           </div>
         </div>
       )}
+
       {branchMenu && (
         <ContextMenu
           x={branchMenu.x}
@@ -287,35 +204,105 @@ export function Sidebar() {
   );
 }
 
+// ── Section ───────────────────────────────────────────────────────────────────
+
 function Section({
-  title,
-  icon,
-  count,
-  children,
+  icon, title, count, children, defaultOpen = true, grow = false,
+  maxHeight, searchable = false, headerAction, color = '#64748b',
 }: {
-  title: string;
   icon?: ReactNode;
+  title: string;
   count?: number;
-  children: ReactNode;
+  children: (searchText: string) => ReactNode;
+  defaultOpen?: boolean;
+  grow?: boolean;
+  maxHeight?: number;
+  searchable?: boolean;
+  headerAction?: ReactNode;
+  color?: string;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchText, setSearchText] = useState('');
+
+  const toggleSearch = () => {
+    setShowSearch(v => !v);
+    setSearchText('');
+  };
+
+  const contentStyle = !grow && maxHeight ? { maxHeight } : undefined;
+  const contentClass = grow
+    ? 'min-h-0 flex-1 overflow-y-auto'
+    : 'overflow-y-auto';
+
   return (
-    <section className="mb-1">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 transition-colors hover:text-slate-200"
+    <section className={`flex border-b border-pilot-line ${open && grow ? 'min-h-0 flex-1' : 'shrink-0'} flex-col`}>
+      {/* Header */}
+      <div
+        className="flex h-9 shrink-0 items-center gap-0 pr-1 transition-colors"
+        style={open ? { backgroundColor: `${color}14`, borderLeft: `2px solid ${color}` } : { borderLeft: '2px solid transparent' }}
       >
-        <span className="text-slate-500">{icon}</span>
-        <span className="flex-1 text-left">{title}</span>
-        {!open && count !== undefined && (
-          <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[9px] font-bold text-slate-300">{count}</span>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex flex-1 items-center gap-1.5 px-2 text-[11px] font-bold uppercase tracking-[0.1em] transition-colors hover:text-slate-200"
+          style={{ color: open ? color : '#94a3b8' }}
+        >
+          <span style={{ color: open ? color : '#64748b' }}>{icon}</span>
+          <span className="flex-1 text-left">{title}</span>
+          {count !== undefined && (
+            <span
+              className="rounded px-1.5 py-0.5 text-[9px] font-bold"
+              style={open ? { backgroundColor: `${color}22`, color } : { backgroundColor: '#21262d', color: '#94a3b8' }}
+            >{count}</span>
+          )}
+          <span className="ml-0.5" style={{ color: open ? `${color}99` : '#475569' }}>{open ? '▾' : '▸'}</span>
+        </button>
+        {open && searchable && (
+          <button
+            className="icon-btn h-6 w-6 justify-center p-0"
+            onClick={toggleSearch}
+            title="Filter"
+            style={{ color: showSearch ? color : undefined }}
+          >
+            <Search size={11} />
+          </button>
         )}
-        <span className="ml-1 text-slate-500">{open ? '▾' : '▸'}</span>
-      </button>
-      {open && <div className="space-y-0.5 pb-1">{children}</div>}
+        {open && headerAction}
+      </div>
+
+      {/* Search input */}
+      {open && showSearch && (
+        <div className="relative shrink-0 px-2 pb-1">
+          <Search size={10} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
+          <input
+            autoFocus
+            className="w-full rounded border border-[#30363d] bg-[#0d1117] py-0.5 pl-6 pr-6 text-[11px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-pilot-blue"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder={`Filter ${title.toLowerCase()}…`}
+          />
+          {searchText && (
+            <button
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+              onClick={() => setSearchText('')}
+            >
+              <X size={10} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Content */}
+      {open && (
+        <div className={contentClass} style={contentStyle}>
+          {children(searchText.toLowerCase())}
+        </div>
+      )}
     </section>
   );
 }
+
+// ── SidebarRow ────────────────────────────────────────────────────────────────
 
 function SidebarRow({
   label, title, active, icon, meta, extra, onClick, onContextMenu, onDelete, onAction, actionIcon, actionTitle,
@@ -353,10 +340,7 @@ function SidebarRow({
           <button
             className="rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
             title={actionTitle}
-            onClick={e => {
-              e.stopPropagation();
-              onAction();
-            }}
+            onClick={e => { e.stopPropagation(); onAction(); }}
           >
             {actionIcon}
           </button>
@@ -365,10 +349,7 @@ function SidebarRow({
           <button
             className="rounded p-0.5 text-slate-400 hover:bg-red-900/60 hover:text-red-400"
             title="Delete"
-            onClick={e => {
-              e.stopPropagation();
-              onDelete();
-            }}
+            onClick={e => { e.stopPropagation(); onDelete(); }}
           >
             <Trash2 size={11} />
           </button>

@@ -194,18 +194,22 @@ export function App() {
           <Sidebar />
         </div>
         <div
-          className="w-1 shrink-0 cursor-col-resize border-r border-pilot-line bg-[#161b22] hover:bg-pilot-blue/60"
+          className="group relative w-[5px] shrink-0 cursor-col-resize border-r border-pilot-line bg-[#161b22] transition-colors hover:bg-pilot-blue/30"
           onMouseDown={startResize(event => setSidebarWidth(Math.min(360, Math.max(190, event.clientX))))}
-        />
+        >
+          <div className="absolute inset-y-0 left-[1px] w-[3px] rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: '#14b8a6', top: 'calc(50% - 20px)', height: 40, borderRadius: 4 }} />
+        </div>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-pilot-bg">
           {showMergePanel ? <MergeConflictPanel /> : diff ? <DiffViewer /> : <GitGraph />}
         </main>
 
         <div
-          className="w-1 shrink-0 cursor-col-resize bg-[#161b22] hover:bg-pilot-blue/60"
+          className="group relative w-[5px] shrink-0 cursor-col-resize border-l border-pilot-line bg-[#161b22] transition-colors hover:bg-pilot-blue/30"
           onMouseDown={startResize(event => setRightWidth(Math.min(640, Math.max(360, window.innerWidth - event.clientX))))}
-        />
+        >
+          <div className="absolute inset-y-0 left-[1px] w-[3px] rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: '#14b8a6', top: 'calc(50% - 20px)', height: 40, borderRadius: 4 }} />
+        </div>
         <aside className="relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-[#0d1117]" style={{ width: rightWidth }}>
           {/* Tab bar */}
           <div className="flex shrink-0 border-b border-pilot-line bg-[#161b22]">
