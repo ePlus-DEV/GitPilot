@@ -41,6 +41,57 @@ body {
          outline-none focus:border-pilot-blue transition-colors;
 }
 
+/* react-day-picker dark theme */
+.gitpilot-cal .rdp-root {
+  --rdp-accent-color: #38bdf8;
+  --rdp-accent-background-color: #38bdf820;
+  --rdp-range_middle-background-color: #38bdf818;
+  --rdp-range_middle-color: #cbd5e1;
+  --rdp-range_start-date-background-color: #38bdf8;
+  --rdp-range_start-color: #0d1117;
+  --rdp-range_end-date-background-color: #38bdf8;
+  --rdp-range_end-color: #0d1117;
+  --rdp-today-color: #38bdf8;
+  --rdp-day-height: 28px;
+  --rdp-day-width: 28px;
+  --rdp-day_button-height: 26px;
+  --rdp-day_button-width: 26px;
+  --rdp-day_button-border-radius: 4px;
+  --rdp-nav_button-height: 1.5rem;
+  --rdp-nav_button-width: 1.5rem;
+  --rdp-nav-height: 2rem;
+  --rdp-outside-opacity: 0.3;
+  --rdp-disabled-opacity: 0.2;
+  color: #94a3b8;
+  font-size: 11px;
+  margin: 0;
+}
+
+.gitpilot-cal .rdp-month_caption {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gitpilot-cal .rdp-weekday {
+  color: #475569;
+  font-size: 10px;
+}
+
+.gitpilot-cal .rdp-day_button:hover:not([disabled]) {
+  background: #21262d;
+  color: #e2e8f0;
+}
+
+.gitpilot-cal .rdp-nav button {
+  color: #64748b;
+}
+
+.gitpilot-cal .rdp-nav button:hover {
+  background: #21262d;
+  color: #94a3b8;
+}
+
 .row {
   @apply flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[#21262d];
 }

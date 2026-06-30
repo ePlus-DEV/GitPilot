@@ -1,11 +1,13 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { ChevronDown, Cloud, EyeOff, GitCommitHorizontal, Monitor, Pencil, RefreshCw, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
+import { ChevronDown, Cloud, EyeOff, GitCommitHorizontal, Monitor, Pencil, RefreshCw, Search, Settings2, Tag, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
+import { useLayoutStore } from '../../store/layoutStore';
 import { gitService } from '../../services/gitService';
 import type { CommitGraphRow, CommitInfo, HistoryFilters } from '../../types/git';
+import { ColumnConfigMenu } from './ColumnConfigMenu';
 
 const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
 const ROW_H = 34;
@@ -75,11 +77,13 @@ function GraphLayer({
   startIndex,
   laneLabels,
   activeLane,
+  left,
 }: {
   rows: RowData[];
   startIndex: number;
   laneLabels: Map<number, string>;
   activeLane: number;
+  left: number;
 }) {
   const [nodeGhost, setNodeGhost] = useState<{ x: number; y: number; color: string; label: string } | null>(null);
   const [hoveredLane, setHoveredLane] = useState<number | null>(null);
@@ -109,7 +113,7 @@ function GraphLayer({
     <>
       <svg
         className="pointer-events-none absolute"
-        style={{ left: BRANCH_COL_W, top: startIndex * ROW_H, width: GRAPH_COL_W, height: svgH, zIndex: 2 }}
+        style={{ left, top: startIndex * ROW_H, width: GRAPH_COL_W, height: svgH, zIndex: 2 }}
         shapeRendering="geometricPrecision"
       >
         {rows.map((row, i) => {
@@ -274,10 +278,13 @@ function ExpandedBadge({ b }: { b: BadgeHover }) {
   );
 }
 
-function BranchCell({ row, selected, onBranchContextMenu }: {
+function BranchCell({ row, selected, onBranchContextMenu, smartBranch, currentBranch, branchColW }: {
   row: RowData;
   selected: boolean;
   onBranchContextMenu?: (e: ReactMouseEvent, name: string, local: boolean, remote: boolean) => void;
+  smartBranch: boolean;
+  currentBranch: string;
+  branchColW: number;
 }) {
   const laneColor = row.graph
     ? LANE_COLORS[row.graph.colorIndex % LANE_COLORS.length]
@@ -287,7 +294,7 @@ function BranchCell({ row, selected, onBranchContextMenu }: {
   // Use typed refs from graph data — avoids '/' ambiguity (local feature/xxx vs remote origin/xxx)
   const graphRefs = row.graph?.refs ?? [];
   const hasAnyRef = graphRefs.some(r => r.refType !== 'head');
-  if (!hasAnyRef) return <div className="shrink-0" style={{ width: BRANCH_COL_W }} />;
+  if (!hasAnyRef || branchColW === 0) return <div className="shrink-0" style={{ width: branchColW }} />;
 
   const isHead = graphRefs.some(r => r.refType === 'head');
 
@@ -324,10 +331,19 @@ function BranchCell({ row, selected, onBranchContextMenu }: {
 
   const tagList = graphRefs.filter(r => r.refType === 'tag').map(r => r.name);
 
-  const showGroups = groups.slice(0, 2);
+  // Smart branch: prioritize current branch in the 2-badge slot
+  const orderedGroups = smartBranch
+    ? (() => {
+        const idx = groups.findIndex(g => g.name === currentBranch);
+        if (idx > 0) return [groups[idx], ...groups.slice(0, idx), ...groups.slice(idx + 1)];
+        return groups;
+      })()
+    : groups;
+
+  const showGroups = orderedGroups.slice(0, 2);
   const showTags = tagList.slice(0, Math.max(0, 2 - showGroups.length));
-  const extra = (groups.length - showGroups.length) + (tagList.length - showTags.length);
-  const allNames = [...groups.map(g => g.displayName), ...tagList].join(', ');
+  const extra = (orderedGroups.length - showGroups.length) + (tagList.length - showTags.length);
+  const allNames = [...orderedGroups.map(g => g.displayName), ...tagList].join(', ');
   const totalBadges = showGroups.length + showTags.length;
   const badgeMaxW = totalBadges <= 1 ? 130 : 64;
 
@@ -353,7 +369,7 @@ function BranchCell({ row, selected, onBranchContextMenu }: {
     <>
       <div
         className="flex shrink-0 items-center justify-end gap-0.5 overflow-hidden px-1"
-        style={{ width: BRANCH_COL_W }}
+        style={{ width: branchColW }}
         onMouseLeave={() => setHover(null)}
       >
         {isHead && (
@@ -412,6 +428,14 @@ const GraphRow = memo(function GraphRow({
   onClick,
   onContextMenu,
   onBranchContextMenu,
+  branchColW,
+  graphColW,
+  changesW,
+  authorW,
+  dateW,
+  shaW,
+  smartBranch,
+  currentBranch,
 }: {
   row: RowData;
   selected: boolean;
@@ -421,14 +445,22 @@ const GraphRow = memo(function GraphRow({
   onClick: () => void;
   onContextMenu: (event: ReactMouseEvent) => void;
   onBranchContextMenu?: (e: ReactMouseEvent, name: string, local: boolean, remote: boolean) => void;
+  branchColW: number;
+  graphColW: number;
+  changesW: number;
+  authorW: number;
+  dateW: number;
+  shaW: number;
+  smartBranch: boolean;
+  currentBranch: string;
 }) {
   const ins = row.commit.insertions ?? 0;
   const del = row.commit.deletions ?? 0;
   const lane = row.graph?.lane ?? 0;
   const lci = row.graph?.colorIndex ?? 0;
   const bandColor = LANE_COLORS[lci % LANE_COLORS.length];
-  const lcx = BRANCH_COL_W + laneX(lane);
-  const graphRight = BRANCH_COL_W + GRAPH_COL_W;
+  const lcx = branchColW + laneX(lane);
+  const graphRight = branchColW + graphColW;
   const bandGradient = isActiveLane
     ? `linear-gradient(90deg, transparent ${Math.max(0, lcx - 20)}px, ${bandColor}0e ${lcx}px, ${bandColor}12 ${lcx + 12}px, ${bandColor}09 ${Math.min(lcx + 55, graphRight - 20)}px, transparent ${graphRight}px)`
     : undefined;
@@ -444,10 +476,17 @@ const GraphRow = memo(function GraphRow({
       style={{ height: ROW_H, backgroundImage: selected ? undefined : bandGradient }}
     >
       {/* Branch column — leftmost */}
-      <BranchCell row={row} selected={selected} onBranchContextMenu={onBranchContextMenu} />
+      <BranchCell
+        row={row}
+        selected={selected}
+        onBranchContextMenu={onBranchContextMenu}
+        smartBranch={smartBranch}
+        currentBranch={currentBranch}
+        branchColW={branchColW}
+      />
 
       {/* Graph column — empty placeholder; graph rendered in shared GraphLayer above */}
-      <div className="shrink-0" style={{ width: GRAPH_COL_W }} />
+      {graphColW > 0 && <div className="shrink-0" style={{ width: graphColW }} />}
 
       {/* Message column */}
       <div className="flex min-w-0 flex-1 items-center px-1.5">
@@ -457,40 +496,48 @@ const GraphRow = memo(function GraphRow({
       </div>
 
       {/* Changes column */}
-      <div className="shrink-0 overflow-hidden" style={{ width: CHANGES_W }}>
-        <ChangesBar ins={ins} del={del} maxTotal={maxTotal} />
-      </div>
+      {changesW > 0 && (
+        <div className="shrink-0 overflow-hidden" style={{ width: changesW }}>
+          <ChangesBar ins={ins} del={del} maxTotal={maxTotal} />
+        </div>
+      )}
 
       {/* Author column */}
-      <div
-        className={`shrink-0 overflow-hidden px-2 text-[11px] ${selected ? 'text-white' : 'text-slate-400'}`}
-        style={{ width: AUTHOR_W }}
-      >
-        <div className="flex items-center gap-1.5">
-          <span
-            className={`h-4 w-4 shrink-0 rounded text-center text-[9px] font-bold leading-4 ${selected ? 'bg-white/20 text-white' : 'bg-[#21262d] text-slate-300'}`}
-          >
-            {row.commit.author.slice(0, 1).toUpperCase()}
-          </span>
-          <span className="truncate">{row.commit.author}</span>
+      {authorW > 0 && (
+        <div
+          className={`shrink-0 overflow-hidden px-2 text-[11px] ${selected ? 'text-white' : 'text-slate-400'}`}
+          style={{ width: authorW }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`h-4 w-4 shrink-0 rounded text-center text-[9px] font-bold leading-4 ${selected ? 'bg-white/20 text-white' : 'bg-[#21262d] text-slate-300'}`}
+            >
+              {row.commit.author.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="truncate">{row.commit.author}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Date column */}
-      <div
-        className={`shrink-0 px-2 text-[10px] ${selected ? 'text-slate-200' : 'text-slate-500'}`}
-        style={{ width: DATE_W }}
-      >
-        {relativeDate(row.commit.date)}
-      </div>
+      {dateW > 0 && (
+        <div
+          className={`shrink-0 px-2 text-[10px] ${selected ? 'text-slate-200' : 'text-slate-500'}`}
+          style={{ width: dateW }}
+        >
+          {relativeDate(row.commit.date)}
+        </div>
+      )}
 
       {/* Hash column */}
-      <div
-        className={`shrink-0 px-2 font-mono text-[10px] ${selected ? 'text-slate-200' : 'text-slate-500'}`}
-        style={{ width: HASH_W }}
-      >
-        {row.commit.shortHash}
-      </div>
+      {shaW > 0 && (
+        <div
+          className={`shrink-0 px-2 font-mono text-[10px] ${selected ? 'text-slate-200' : 'text-slate-500'}`}
+          style={{ width: shaW }}
+        >
+          {row.commit.shortHash}
+        </div>
+      )}
     </button>
   );
 });
@@ -510,10 +557,19 @@ export function GitGraph() {
   const run = useGitStore(s => s.run);
   const log = useGitStore(s => s.log);
   const [fetching, setFetching] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const closeConfig = useCallback(() => setConfigOpen(false), []);
+
+  const { columns: cols, compactGraph, smartBranch } = useLayoutStore();
+  const effectiveBranchW = cols.branch && !compactGraph ? BRANCH_COL_W : 0;
+  const effectiveGraphW = cols.graph ? GRAPH_COL_W : 0;
+  const effectiveChangesW = cols.changes ? CHANGES_W : 0;
+  const effectiveAuthorW = cols.author ? AUTHOR_W : 0;
+  const effectiveDateW = cols.date ? DATE_W : 0;
+  const effectiveShaW = cols.sha ? HASH_W : 0;
 
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<HistoryFilters>(historyFilters);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [dimMerges, setDimMerges] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
@@ -540,6 +596,13 @@ export function GitGraph() {
       graph: graphMap.get(commit.hash) ?? null,
     }));
   }, [history, graphData]);
+  const repoDateRange = useMemo(() => {
+    const dates = history.map(c => c.date).filter(Boolean).sort();
+    if (!dates.length) return undefined;
+    const parseD = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+    return { min: parseD(dates[0]), max: parseD(dates[dates.length - 1]) };
+  }, [history]);
+
   const authors = useMemo(() => Array.from(new Set(history.map(c => c.author))).sort(), [history]);
   const refs = useMemo(() => Array.from(new Set(history.flatMap(c => c.refs.map(cleanRef)))).sort(), [history]);
   const visibleRows = useMemo(() => rows.filter(row => matchesCommit(row.commit, search)), [rows, search]);
@@ -881,41 +944,45 @@ export function GitGraph() {
               <span className="hidden lg:inline">Merges</span>
             </button>
 
-            <button
-              className={`icon-btn h-7 ${filtersOpen ? 'accent' : ''}`}
-              onClick={() => setFiltersOpen(v => !v)}
-              title="Advanced filters"
-            >
-              <SlidersHorizontal size={12} />
-            </button>
             {hasFilter && (
-              <button className="icon-btn h-7" onClick={clear}>
+              <button className="icon-btn h-7" onClick={clear} title="Clear filters">
                 <X size={12} />
               </button>
             )}
           </div>
         </div>
 
-        {/* Advanced filters */}
-        {filtersOpen && (
-          <div className="grid grid-cols-[minmax(120px,150px)_minmax(120px,150px)_1fr_1fr] gap-2 border-t border-pilot-line px-3 py-2">
-            <input className="input h-7 text-xs" type="date" value={filters.since ?? ''} onChange={e => setFilters(f => ({ ...f, since: e.target.value || undefined }))} title="Since" />
-            <input className="input h-7 text-xs" type="date" value={filters.until ?? ''} onChange={e => setFilters(f => ({ ...f, until: e.target.value || undefined }))} title="Until" />
-            <input className="input h-7 text-xs" value={filters.keyword ?? ''} onChange={e => setFilters(f => ({ ...f, keyword: e.target.value || undefined }))} placeholder="Message keyword" />
-            <input className="input h-7 text-xs" value={filters.filePath ?? ''} onChange={e => setFilters(f => ({ ...f, filePath: e.target.value || undefined }))} placeholder="File path filter" />
-          </div>
-        )}
       </div>
 
       {/* Column headers */}
-      <div className="flex shrink-0 select-none border-b border-pilot-line bg-pilot-bg text-[9px] font-bold uppercase tracking-wider text-slate-600">
-        <div className="shrink-0 px-2 py-1.5" style={{ width: BRANCH_COL_W }}>Branch</div>
-        <div className="shrink-0" style={{ width: GRAPH_COL_W }} />
+      <div className="relative flex shrink-0 select-none border-b border-pilot-line bg-pilot-bg text-[9px] font-bold uppercase tracking-wider text-slate-600">
+        {effectiveBranchW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveBranchW }}>Branch</div>}
+        {effectiveGraphW > 0 && <div className="shrink-0" style={{ width: effectiveGraphW }} />}
         <div className="min-w-0 flex-1 px-2 py-1.5">Commit</div>
-        <div className="shrink-0 px-2 py-1.5" style={{ width: CHANGES_W }}>Changes</div>
-        <div className="shrink-0 px-2 py-1.5" style={{ width: AUTHOR_W }}>Author</div>
-        <div className="shrink-0 px-2 py-1.5" style={{ width: DATE_W }}>Date</div>
-        <div className="shrink-0 px-2 py-1.5" style={{ width: HASH_W }}>SHA</div>
+        {effectiveChangesW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveChangesW }}>Changes</div>}
+        {effectiveAuthorW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveAuthorW }}>Author</div>}
+        {effectiveDateW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveDateW }}>Date</div>}
+        {effectiveShaW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveShaW }}>SHA</div>}
+        <div className="relative shrink-0">
+          <button
+            className={`flex h-full items-center px-2 py-1.5 hover:text-slate-400 ${configOpen ? 'text-sky-400' : ''}`}
+            title="Configure columns"
+            onClick={() => setConfigOpen(v => !v)}
+          >
+            <Settings2 size={11} />
+          </button>
+          {configOpen && (
+              <ColumnConfigMenu
+                onClose={closeConfig}
+                filters={filters}
+                onFiltersChange={f => setFilters(f)}
+                hasActiveFilter={Boolean(filters.since || filters.until || filters.keyword || filters.filePath)}
+                onClearFilters={() => setFilters({})}
+                minDate={repoDateRange?.min}
+                maxDate={repoDateRange?.max}
+              />
+            )}
+        </div>
       </div>
 
       {/* Commit list */}
@@ -933,16 +1000,18 @@ export function GitGraph() {
             onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
           >
             {/* Branch placeholder */}
-            <div className="shrink-0" style={{ width: BRANCH_COL_W }} />
+            {effectiveBranchW > 0 && <div className="shrink-0" style={{ width: effectiveBranchW }} />}
             {/* WIP dot — white diamond-ish */}
-            <div className="shrink-0 overflow-hidden" style={{ width: GRAPH_COL_W }}>
-              <svg width={GRAPH_W} height={wdRowH} className="block overflow-hidden">
-                <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R + 3} fill="#ffffff" opacity={0.08} />
-                <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R} fill="#e2e8f0" />
-                <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R - 1.5} fill="#0d1117" />
-                <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R - 1.5} fill="#e2e8f0" opacity={0.4} />
-              </svg>
-            </div>
+            {effectiveGraphW > 0 && (
+              <div className="shrink-0 overflow-hidden" style={{ width: effectiveGraphW }}>
+                <svg width={GRAPH_W} height={wdRowH} className="block overflow-hidden">
+                  <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R + 3} fill="#ffffff" opacity={0.08} />
+                  <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R} fill="#e2e8f0" />
+                  <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R - 1.5} fill="#0d1117" />
+                  <circle cx={PAD_LEFT} cy={wdRowH / 2} r={CIRCLE_R - 1.5} fill="#e2e8f0" opacity={0.4} />
+                </svg>
+              </div>
+            )}
 
             {/* WIP label */}
             <div className="flex min-w-0 flex-1 items-center gap-2 px-1.5">
@@ -957,21 +1026,27 @@ export function GitGraph() {
             </div>
 
             {/* Changes placeholder */}
-            <div className="shrink-0" style={{ width: CHANGES_W }} />
+            {effectiveChangesW > 0 && <div className="shrink-0" style={{ width: effectiveChangesW }} />}
 
             {/* Author: no avatar for WIP */}
-            <div className="shrink-0 px-2 text-[11px] text-slate-600" style={{ width: AUTHOR_W }}>
-              working tree
-            </div>
-            <div className="shrink-0 px-2 text-[10px] text-slate-600" style={{ width: DATE_W }}>now</div>
-            <div className="shrink-0 px-2 font-mono text-[10px] text-slate-600" style={{ width: HASH_W }}>HEAD</div>
+            {effectiveAuthorW > 0 && (
+              <div className="shrink-0 px-2 text-[11px] text-slate-600" style={{ width: effectiveAuthorW }}>
+                working tree
+              </div>
+            )}
+            {effectiveDateW > 0 && (
+              <div className="shrink-0 px-2 text-[10px] text-slate-600" style={{ width: effectiveDateW }}>now</div>
+            )}
+            {effectiveShaW > 0 && (
+              <div className="shrink-0 px-2 font-mono text-[10px] text-slate-600" style={{ width: effectiveShaW }}>HEAD</div>
+            )}
           </button>
         )}
 
         {/* Virtual scrolled commit rows */}
         <div className="relative" style={{ height: totalListHeight }}>
           {/* Shared graph SVG layer — renders all lane lines/nodes without per-row clipping */}
-          <GraphLayer rows={renderedRows} startIndex={startIndex} laneLabels={laneLabels} activeLane={activeLane} />
+          {effectiveGraphW > 0 && <GraphLayer rows={renderedRows} startIndex={startIndex} laneLabels={laneLabels} activeLane={activeLane} left={effectiveBranchW} />}
 
           {renderedRows.map((row, i) => {
             const index = startIndex + i;
@@ -1003,6 +1078,14 @@ export function GitGraph() {
                     e.stopPropagation();
                     setBranchMenu({ x: e.clientX, y: e.clientY, name, local, remote });
                   }}
+                  branchColW={effectiveBranchW}
+                  graphColW={effectiveGraphW}
+                  changesW={effectiveChangesW}
+                  authorW={effectiveAuthorW}
+                  dateW={effectiveDateW}
+                  shaW={effectiveShaW}
+                  smartBranch={smartBranch}
+                  currentBranch={currentBranch}
                 />
               </div>
             );
