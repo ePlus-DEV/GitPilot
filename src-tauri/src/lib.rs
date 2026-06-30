@@ -86,6 +86,7 @@ pub fn run() {
             commands::staging::stage_all,
             commands::staging::unstage_all,
             commands::staging::discard_file,
+            commands::staging::revert_hunk,
             commands::staging::delete_untracked_file,
             commands::diff::get_diff,
             commands::diff::get_commit_file_diff,

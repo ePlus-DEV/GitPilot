@@ -199,7 +199,7 @@ export function App() {
         />
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-pilot-bg">
-          {showMergePanel ? <MergeConflictPanel /> : <GitGraph />}
+          {showMergePanel ? <MergeConflictPanel /> : diff ? <DiffViewer /> : <GitGraph />}
         </main>
 
         <div
@@ -232,12 +232,12 @@ export function App() {
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {selectedCommit && !conflict && (
-                <div className={`${diff ? 'basis-[42%]' : 'flex-1'} min-h-[180px] overflow-auto border-b border-pilot-line bg-pilot-panel`}>
+                <div className="min-h-[180px] flex-1 overflow-auto border-b border-pilot-line bg-pilot-panel">
                   <CommitDetails />
                 </div>
               )}
-              {conflict ? <MergeResolver /> : diff ? <DiffViewer /> : null}
-              {!selectedCommit && !conflict && !diff && (
+              {conflict && <MergeResolver />}
+              {!selectedCommit && !conflict && (
                 <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs text-slate-500">
                   Select a commit to inspect it.
                 </div>
