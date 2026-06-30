@@ -162,6 +162,7 @@ pub fn run() {
             commands::graph::get_commit_graph,
             commands::system::open_in_terminal,
             commands::system::open_in_file_manager,
+            commands::system::run_shell_command,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run GitPilot");

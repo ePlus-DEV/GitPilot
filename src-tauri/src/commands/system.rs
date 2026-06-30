@@ -1,4 +1,12 @@
 use std::process::Command;
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct ShellOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+}
 
 #[tauri::command]
 pub fn open_in_terminal(path: String) -> Result<(), String> {
@@ -8,6 +16,32 @@ pub fn open_in_terminal(path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn open_in_file_manager(path: String) -> Result<(), String> {
     open_file_manager_impl(path)
+}
+
+#[tauri::command]
+pub fn run_shell_command(path: String, command: String) -> Result<ShellOutput, String> {
+    let output = shell_exec(&path, &command).map_err(|e| e.to_string())?;
+    Ok(ShellOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        exit_code: output.status.code().unwrap_or(-1),
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn shell_exec(path: &str, command: &str) -> std::io::Result<std::process::Output> {
+    Command::new("cmd")
+        .args(["/c", command])
+        .current_dir(path)
+        .output()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn shell_exec(path: &str, command: &str) -> std::io::Result<std::process::Output> {
+    Command::new("sh")
+        .args(["-c", command])
+        .current_dir(path)
+        .output()
 }
 
 #[cfg(target_os = "windows")]
