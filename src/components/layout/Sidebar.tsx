@@ -4,6 +4,7 @@ import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import type { BranchInfo } from '../../types/git';
+import { gpPrompt, gpConfirm } from '../common/Dialog';
 
 export function Sidebar() {
   const recent = useGitStore(s => s.recent);
@@ -27,7 +28,6 @@ export function Sidebar() {
     if (nextRepo) void openRepo(nextRepo);
     else closeRepo();
   };
-  const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
   const branchRef = (branch: BranchInfo) => branch.name.replace(/^remotes\//, '');
   const branchDisplay = (branch: BranchInfo, remote?: string) => {
     const ref = branchRef(branch);
@@ -43,22 +43,22 @@ export function Sidebar() {
       void navigator.clipboard.writeText(value).then(() => useGitStore.getState().log(`${label}: ${value}`)).catch(() => useGitStore.getState().log(value));
     };
     return [
-      { label: 'Checkout branch', action: () => repo && void run('checkout', () => gitService.checkoutBranch(repo, ref)) },
-      { label: `Create worktree from ${ref}`, action: () => { const path = ask('Worktree path', `../worktree-${branchDisplay(branch)}`); if (path && repo) void run('create worktree', () => gitService.createWorktree(repo, path, ref, false)); } },
+      { label: 'Checkout branch', action: () => { if (repo) void run('checkout', () => gitService.checkoutBranch(repo, ref)); } },
+      { label: `Create worktree from ${ref}`, action: async () => { const path = await gpPrompt('Worktree path', `../worktree-${branchDisplay(branch)}`); if (path && repo) void run('create worktree', () => gitService.createWorktree(repo, path, ref, false)); } },
       separator('branch-actions'),
-      { label: 'Create branch here', action: () => { const name = ask('New branch name', `${branchDisplay(branch)}-copy`); if (name && repo) void run('branch from ref', () => gitService.createBranchFromCommit(repo, name, ref, true)); } },
-      { label: 'Merge into current branch', action: () => { if (confirm(`Merge ${ref} into current branch?`)) repo && void run('merge branch', () => gitService.mergeBranch(repo, ref)); } },
-      { label: 'Compare with HEAD', action: () => repo && void run('compare branch', () => gitService.compareBranch(repo, ref), 'none') },
-      { label: `Reset ${currentBranch} to ${ref}: soft`, disabled: branch.current, action: () => { if (confirm(`Soft reset ${currentBranch} to ${ref}?`)) repo && void run('soft reset', () => gitService.resetToCommit(repo, ref, 'soft')); } },
-      { label: `Reset ${currentBranch} to ${ref}: mixed`, disabled: branch.current, action: () => { if (confirm(`Mixed reset ${currentBranch} to ${ref}?`)) repo && void run('mixed reset', () => gitService.resetToCommit(repo, ref, 'mixed')); } },
-      { label: `Reset ${currentBranch} to ${ref}: hard`, danger: true, disabled: branch.current, action: () => { if (confirm(`Hard reset ${currentBranch} to ${ref}? This can discard work.`)) repo && void run('hard reset', () => gitService.resetToCommit(repo, ref, 'hard')); } },
+      { label: 'Create branch here', action: async () => { const name = await gpPrompt('New branch name', `${branchDisplay(branch)}-copy`); if (name && repo) void run('branch from ref', () => gitService.createBranchFromCommit(repo, name, ref, true)); } },
+      { label: 'Merge into current branch', action: async () => { if (await gpConfirm(`Merge ${ref} into current branch?`)) { if (repo) void run('merge branch', () => gitService.mergeBranch(repo, ref)); } } },
+      { label: 'Compare with HEAD', action: () => { if (repo) void run('compare branch', () => gitService.compareBranch(repo, ref), 'none'); } },
+      { label: `Reset ${currentBranch} to ${ref}: soft`, disabled: branch.current, action: async () => { if (await gpConfirm(`Soft reset ${currentBranch} to ${ref}?`)) { if (repo) void run('soft reset', () => gitService.resetToCommit(repo, ref, 'soft')); } } },
+      { label: `Reset ${currentBranch} to ${ref}: mixed`, disabled: branch.current, action: async () => { if (await gpConfirm(`Mixed reset ${currentBranch} to ${ref}?`)) { if (repo) void run('mixed reset', () => gitService.resetToCommit(repo, ref, 'mixed')); } } },
+      { label: `Reset ${currentBranch} to ${ref}: hard`, danger: true, disabled: branch.current, action: async () => { if (await gpConfirm(`Hard reset ${currentBranch} to ${ref}? This can discard work.`, true)) { if (repo) void run('hard reset', () => gitService.resetToCommit(repo, ref, 'hard')); } } },
       separator('remote-actions'),
-      { label: 'Rename branch', disabled: !canWriteLocal, action: () => { const next = ask('New branch name', branch.name); if (next && repo) void run('rename branch', () => gitService.renameBranch(repo, branch.name, next)); } },
-      { label: `Push to ${remoteName}`, disabled: !canWriteLocal, action: () => repo && void run('push branch', () => gitService.pushNewBranch(repo, remoteName, branch.name)) },
-      { label: `Fetch ${remoteName}`, action: () => repo && void run('fetch', () => gitService.fetch(repo, remoteName)) },
+      { label: 'Rename branch', disabled: !canWriteLocal, action: async () => { const next = await gpPrompt('New branch name', branch.name); if (next && repo) void run('rename branch', () => gitService.renameBranch(repo, branch.name, next)); } },
+      { label: `Push to ${remoteName}`, disabled: !canWriteLocal, action: () => { if (repo) void run('push branch', () => gitService.pushNewBranch(repo, remoteName, branch.name)); } },
+      { label: `Fetch ${remoteName}`, action: () => { if (repo) void run('fetch', () => gitService.fetch(repo, remoteName)); } },
       separator('delete-actions'),
-      { label: 'Delete branch', danger: true, disabled: !canWriteLocal || branch.current, action: () => { if (confirm(`Delete ${branch.name}?`)) repo && void run('delete branch', () => gitService.deleteBranch(repo, branch.name, false)); } },
-      { label: 'Force delete branch', danger: true, disabled: !canWriteLocal || branch.current, action: () => { if (confirm(`Force delete ${branch.name}? This can discard unmerged commits.`)) repo && void run('force delete branch', () => gitService.deleteBranch(repo, branch.name, true)); } },
+      { label: 'Delete branch', danger: true, disabled: !canWriteLocal || branch.current, action: async () => { if (await gpConfirm(`Delete ${branch.name}?`, true)) { if (repo) void run('delete branch', () => gitService.deleteBranch(repo, branch.name, false)); } } },
+      { label: 'Force delete branch', danger: true, disabled: !canWriteLocal || branch.current, action: async () => { if (await gpConfirm(`Force delete ${branch.name}? This can discard unmerged commits.`, true)) { if (repo) void run('force delete branch', () => gitService.deleteBranch(repo, branch.name, true)); } } },
       separator('copy-actions'),
       { label: 'Copy branch name', action: () => copyText('Copied branch name', ref) },
     ];

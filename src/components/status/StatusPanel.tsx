@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight, FilePlus2, Minus, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { gpConfirm } from '../common/Dialog';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import type { GitFileStatus } from '../../types/git';
@@ -19,7 +20,7 @@ export function StatusPanel() {
   const fileMenuItems = ({ file, cached, conflicted }: NonNullable<typeof menu>): ContextMenuItem[] => [
     {
       label: cached ? 'Unstage file' : conflicted ? 'Open resolver' : 'Stage file',
-      action: () => cached ? act('unstage', () => gitService.unstageFile(repo!, file.path)) : conflicted ? void loadConflict(file.path) : act('stage', () => gitService.stageFile(repo!, file.path)),
+      action: () => { if (cached) act('unstage', () => gitService.unstageFile(repo!, file.path)); else if (conflicted) void loadConflict(file.path); else act('stage', () => gitService.stageFile(repo!, file.path)); },
     },
     {
       label: 'Show diff',
@@ -30,13 +31,13 @@ export function StatusPanel() {
       label: 'Discard changes',
       danger: true,
       disabled: cached || conflicted || file.worktreeStatus === '?',
-      action: () => repo && confirm(`Discard ${file.path}?`) && void run('discard', () => gitService.discardFile(repo, file.path), 'status'),
+      action: async () => { if (repo && await gpConfirm(`Discard ${file.path}?`, true)) void run('discard', () => gitService.discardFile(repo, file.path), 'status'); },
     },
     {
       label: 'Delete untracked file',
       danger: true,
       disabled: file.worktreeStatus !== '?' && file.indexStatus !== '?',
-      action: () => repo && confirm(`Delete ${file.path}?`) && void run('delete', () => gitService.deleteUntrackedFile(repo, file.path), 'status'),
+      action: async () => { if (repo && await gpConfirm(`Delete ${file.path}?`, true)) void run('delete', () => gitService.deleteUntrackedFile(repo, file.path), 'status'); },
     },
     { label: 'copy-separator', separator: true, action: () => undefined },
     {
@@ -140,7 +141,7 @@ export function StatusPanel() {
                 action="Stage"
                 actionIcon={<Plus size={11} />}
                 onAction={() => act('stage', () => gitService.stageFile(repo!, f.path))}
-                onDiscard={() => repo && confirm(`Discard ${f.path}?`) && run('discard', () => gitService.discardFile(repo, f.path), 'status')}
+                onDiscard={async () => repo && await gpConfirm(`Discard ${f.path}?`, true) && run('discard', () => gitService.discardFile(repo, f.path), 'status')}
                 onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY, file: f, cached: false }); }}
               />
             ))}
@@ -151,7 +152,7 @@ export function StatusPanel() {
                 action="Add"
                 actionIcon={<FilePlus2 size={11} />}
                 onAction={() => act('stage', () => gitService.stageFile(repo!, f.path))}
-                onDelete={() => repo && confirm(`Delete ${f.path}?`) && run('delete', () => gitService.deleteUntrackedFile(repo, f.path), 'status')}
+                onDelete={async () => repo && await gpConfirm(`Delete ${f.path}?`, true) && run('delete', () => gitService.deleteUntrackedFile(repo, f.path), 'status')}
                 onContextMenu={event => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY, file: f, cached: false }); }}
               />
             ))}

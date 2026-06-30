@@ -24,6 +24,7 @@ import { NewTabPanel } from './components/layout/NewTabPanel';
 import { GitPilotIcon } from './components/common/GitPilotIcon';
 import { UpdateDialog } from './components/update/UpdateDialog';
 import { gitService } from './services/gitService';
+import { DialogHost, gpPrompt } from './components/common/Dialog';
 
 export function App() {
   const repo = useGitStore(s => s.repo);
@@ -83,19 +84,20 @@ export function App() {
     });
 
     on('menu://clone_repo', () => {
-      const url = prompt('Clone URL:')?.trim();
-      if (!url) return;
-      open({ directory: true, multiple: false, title: 'Clone into folder' }).then(async parent => {
-        if (!parent || Array.isArray(parent)) return;
-        const state = useGitStore.getState();
-        const folder = url.split('/').pop()?.replace(/\.git$/, '') ?? 'repo';
-        void state.run('clone', () =>
-          gitService.cloneRepository(url, `${parent}/${folder}`).then(async r => {
-            await gitService.saveRecentRepository(r.path);
-            await state.openRepo(r.path);
-            return r;
-          })
-        );
+      void gpPrompt('Clone URL:').then(url => {
+        if (!url) return;
+        open({ directory: true, multiple: false, title: 'Clone into folder' }).then(async parent => {
+          if (!parent || Array.isArray(parent)) return;
+          const state = useGitStore.getState();
+          const folder = url.split('/').pop()?.replace(/\.git$/, '') ?? 'repo';
+          void state.run('clone', () =>
+            gitService.cloneRepository(url, `${parent}/${folder}`).then(async r => {
+              await gitService.saveRecentRepository(r.path);
+              await state.openRepo(r.path);
+              return r;
+            })
+          );
+        });
       });
     });
 
@@ -170,6 +172,7 @@ export function App() {
 
   return (
     <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
+      <DialogHost />
       {settingsOpen && <SettingsPanel />}
       {repoMgmtOpen && <RepoManagementPanel />}
       {updateOpen && <UpdateDialog onClose={() => { setUpdateOpen(false); setUpdateTestMode(false); }} testMode={updateTestMode} />}

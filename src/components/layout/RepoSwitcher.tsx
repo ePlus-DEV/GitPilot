@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FolderOpen, GitFork, Search } from 'lucide-react';
+import { ChevronDown, FolderOpen, GitFork, Search, Settings2 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useGitStore } from '../../store/gitStore';
+import { useGitStore, startAutoFetch } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
+import { getRepoConfig, setRepoConfig } from '../../utils/repoConfig';
+import { gpPrompt } from '../common/Dialog';
+
+const AUTO_FETCH_OPTIONS = [
+  { label: 'Inherit global', value: -1 },
+  { label: 'Disabled',       value: 0 },
+  { label: '30 seconds',     value: 30 },
+  { label: '1 minute',       value: 60 },
+  { label: '5 minutes',      value: 300 },
+  { label: '10 minutes',     value: 600 },
+  { label: '30 minutes',     value: 1800 },
+];
 
 export function RepoSwitcher() {
   const repo = useGitStore(s => s.repo);
@@ -10,6 +22,7 @@ export function RepoSwitcher() {
   const openRepo = useGitStore(s => s.openRepo);
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [configPath, setConfigPath] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,11 +49,11 @@ export function RepoSwitcher() {
 
   const cloneRepo = async () => {
     setIsOpen(false);
-    const url = prompt('Clone URL')?.trim();
+    const url = await gpPrompt('Clone URL');
     if (!url) return;
     const parent = await open({ directory: true, multiple: false, title: 'Choose clone parent folder' });
     if (!parent || Array.isArray(parent)) return;
-    const folder = prompt('Destination folder name', inferRepoName(url))?.trim();
+    const folder = await gpPrompt('Destination folder name', inferRepoName(url));
     if (!folder) return;
     useGitStore.setState({ busy: true });
     const log = useGitStore.getState().log;
@@ -110,20 +123,52 @@ export function RepoSwitcher() {
                   const name = path.split(/[\\/]/).pop() ?? path;
                   const dir = path.slice(0, path.length - name.length - 1);
                   const isActive = repo?.path === path;
+                  const showCfg = configPath === path;
+                  const cfg = getRepoConfig(path);
+                  const cfgVal = cfg.autoFetchInterval !== undefined ? cfg.autoFetchInterval : -1;
                   return (
-                    <button
-                      key={path}
-                      onClick={() => { void openRepo(path); setIsOpen(false); setSearch(''); }}
-                      className={`flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left transition-colors ${
-                        isActive ? 'bg-[#21262d]' : 'hover:bg-[#21262d]'
-                      }`}
-                    >
-                      <FolderOpen size={13} className={isActive ? 'text-pilot-blue shrink-0' : 'text-slate-500 shrink-0'} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium text-slate-200">{name}</span>
-                        <span className="block truncate text-[10px] text-slate-500">{dir}</span>
-                      </span>
-                    </button>
+                    <div key={path} className="rounded">
+                      <div className={`group flex items-center gap-2.5 rounded px-2 py-1.5 transition-colors ${isActive ? 'bg-[#21262d]' : 'hover:bg-[#21262d]'}`}>
+                        <button
+                          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                          onClick={() => { void openRepo(path); setIsOpen(false); setSearch(''); setConfigPath(null); }}
+                        >
+                          <FolderOpen size={13} className={isActive ? 'text-pilot-blue shrink-0' : 'text-slate-500 shrink-0'} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-medium text-slate-200">{name}</span>
+                            <span className="block truncate text-[10px] text-slate-500">{dir}</span>
+                          </span>
+                        </button>
+                        <button
+                          className={`shrink-0 rounded p-1 transition-colors ${showCfg ? 'text-pilot-blue' : 'text-slate-600 opacity-0 group-hover:opacity-100 hover:text-slate-300'}`}
+                          title="Per-repo settings"
+                          onClick={e => { e.stopPropagation(); setConfigPath(showCfg ? null : path); }}
+                        >
+                          <Settings2 size={12} />
+                        </button>
+                      </div>
+                      {showCfg && (
+                        <div className="mx-2 mb-1.5 rounded border border-[#30363d] bg-[#0d1117] p-2">
+                          <div className="mb-1 text-[10px] font-semibold text-slate-400">Auto-fetch interval</div>
+                          <select
+                            className="w-full rounded border border-[#30363d] bg-[#21262d] px-2 py-1 text-xs text-slate-200 outline-none focus:border-pilot-blue"
+                            value={cfgVal}
+                            onChange={e => {
+                              const v = Number(e.target.value);
+                              setRepoConfig(path, { autoFetchInterval: v === -1 ? undefined : v });
+                              if (isActive) {
+                                const globalInterval = useGitStore.getState().settings?.autoFetchInterval ?? 0;
+                                startAutoFetch(v === -1 ? globalInterval : v);
+                              }
+                            }}
+                          >
+                            {AUTO_FETCH_OPTIONS.map(o => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </>

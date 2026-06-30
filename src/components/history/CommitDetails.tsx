@@ -1,5 +1,6 @@
 import { GitBranch, GitCompare, RotateCcw, Tag, Undo2 } from 'lucide-react';
 import { useState } from 'react';
+import { gpPrompt, gpConfirm } from '../common/Dialog';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
@@ -19,7 +20,6 @@ export function CommitDetails() {
 
   const short = commit.shortHash;
   const revision = commit.hash.trim() || commit.shortHash.trim();
-  const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
   const runCommitAction = (label: string, fn: () => Promise<unknown>) => repo && void run(label, fn);
   const openCommitFileDiff = (file: CommitFile) => {
     if (!repo || !revision || !file.path.trim()) return;
@@ -34,8 +34,8 @@ export function CommitDetails() {
     { label: 'Show file diff', action: () => openCommitFileDiff(file) },
     {
       label: 'Restore file from this commit',
-      action: () => {
-        if (confirm(`Restore ${file.path} from ${short} into the working tree?`))
+      action: async () => {
+        if (await gpConfirm(`Restore ${file.path} from ${short} into the working tree?`))
           runCommitAction('restore file from commit', () => gitService.restoreFileFromCommit(repo!, revision, file.path));
       },
     },
@@ -68,19 +68,19 @@ export function CommitDetails() {
 
       <div className="shrink-0 border-b border-pilot-line px-4 py-3">
         <div className="mb-2 flex flex-wrap gap-1.5">
-          <button className="icon-btn accent" title="Create a branch at this commit" onClick={() => { const name = ask('New branch name', `branch-${short}`); if (name) runCommitAction('branch from commit', () => gitService.createBranchFromCommit(repo!, name, revision, true)); }}>
+          <button className="icon-btn accent" title="Create a branch at this commit" onClick={async () => { const name = await gpPrompt('New branch name', `branch-${short}`); if (name) runCommitAction('branch from commit', () => gitService.createBranchFromCommit(repo!, name, revision, true)); }}>
             <GitBranch size={12} /> Branch
           </button>
-          <button className="icon-btn" title="Create a lightweight tag at this commit" onClick={() => { const name = ask('New tag name', `tag-${short}`); if (name) runCommitAction('tag commit', () => gitService.createTagFromCommit(repo!, name, revision)); }}>
+          <button className="icon-btn" title="Create a lightweight tag at this commit" onClick={async () => { const name = await gpPrompt('New tag name', `tag-${short}`); if (name) runCommitAction('tag commit', () => gitService.createTagFromCommit(repo!, name, revision)); }}>
             <Tag size={12} /> Tag
           </button>
-          <button className="icon-btn" title="Cherry-pick this commit" onClick={() => confirm(`Cherry-pick ${short}?`) && runCommitAction('cherry-pick', () => gitService.cherryPickCommit(repo!, revision))}>
+          <button className="icon-btn" title="Cherry-pick this commit" onClick={async () => await gpConfirm(`Cherry-pick ${short}?`) && runCommitAction('cherry-pick', () => gitService.cherryPickCommit(repo!, revision))}>
             <GitCompare size={12} /> Pick
           </button>
-          <button className="icon-btn" title="Revert this commit" onClick={() => confirm(`Revert ${short}?`) && runCommitAction('revert commit', () => gitService.revertCommit(repo!, revision))}>
+          <button className="icon-btn" title="Revert this commit" onClick={async () => await gpConfirm(`Revert ${short}?`) && runCommitAction('revert commit', () => gitService.revertCommit(repo!, revision))}>
             <Undo2 size={12} /> Revert
           </button>
-          <button className="icon-btn" title="Checkout this commit in detached HEAD" onClick={() => confirm(`Checkout ${short} in detached HEAD?`) && runCommitAction('checkout commit', () => gitService.checkoutCommit(repo!, revision))}>
+          <button className="icon-btn" title="Checkout this commit in detached HEAD" onClick={async () => await gpConfirm(`Checkout ${short} in detached HEAD?`, true) && runCommitAction('checkout commit', () => gitService.checkoutCommit(repo!, revision))}>
             <RotateCcw size={12} /> Checkout
           </button>
         </div>
@@ -88,9 +88,9 @@ export function CommitDetails() {
         <div>
           <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Reset current branch</div>
           <div className="flex flex-wrap gap-1.5">
-            <button className="btn" title="Keep all changes staged" onClick={() => confirm(`Soft reset current branch to ${short}?`) && runCommitAction('soft reset', () => gitService.resetToCommit(repo!, revision, 'soft'))}>Soft</button>
-            <button className="btn" title="Keep changes unstaged" onClick={() => confirm(`Mixed reset current branch to ${short}?`) && runCommitAction('mixed reset', () => gitService.resetToCommit(repo!, revision, 'mixed'))}>Mixed</button>
-            <button className="btn border-red-900/60 text-red-300 hover:bg-red-950/50" title="Discard changes after this commit" onClick={() => confirm(`Hard reset current branch to ${short}? This can discard work.`) && runCommitAction('hard reset', () => gitService.resetToCommit(repo!, revision, 'hard'))}>Hard</button>
+            <button className="btn" title="Keep all changes staged" onClick={async () => await gpConfirm(`Soft reset current branch to ${short}?`) && runCommitAction('soft reset', () => gitService.resetToCommit(repo!, revision, 'soft'))}>Soft</button>
+            <button className="btn" title="Keep changes unstaged" onClick={async () => await gpConfirm(`Mixed reset current branch to ${short}?`) && runCommitAction('mixed reset', () => gitService.resetToCommit(repo!, revision, 'mixed'))}>Mixed</button>
+            <button className="btn border-red-900/60 text-red-300 hover:bg-red-950/50" title="Discard changes after this commit" onClick={async () => await gpConfirm(`Hard reset current branch to ${short}? This can discard work.`, true) && runCommitAction('hard reset', () => gitService.resetToCommit(repo!, revision, 'hard'))}>Hard</button>
           </div>
         </div>
       </div>

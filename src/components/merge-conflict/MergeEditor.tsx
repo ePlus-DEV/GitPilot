@@ -3,6 +3,7 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as MonacoEditorNS } from 'monaco-editor';
 import { ChevronLeft, ChevronRight, Save, X, SkipForward } from 'lucide-react';
 import type { ConflictFileData } from '../../types/git';
+import { gpConfirm } from '../common/Dialog';
 import { findConflicts, resolveBlock, resolveAll, hasConflicts, countConflicts, type ResolveChoice } from './diff3-model';
 
 interface Props {
@@ -133,11 +134,11 @@ export function MergeEditor({ fileData, onSave, onClose }: Props) {
     setTimeout(() => refreshDecorations(0), 0);
   }, [refreshDecorations]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const editor = outputEditorRef.current;
     if (!editor) return;
     const content = editor.getValue();
-    if (hasConflicts(content) && !confirm('Conflict markers remain. Save anyway?')) return;
+    if (hasConflicts(content) && !await gpConfirm('Conflict markers remain. Save anyway?')) return;
     onSave(content);
   };
 

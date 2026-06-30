@@ -8,6 +8,7 @@ import { useLayoutStore } from '../../store/layoutStore';
 import { gitService } from '../../services/gitService';
 import type { CommitGraphRow, CommitInfo, HistoryFilters } from '../../types/git';
 import { ColumnConfigMenu } from './ColumnConfigMenu';
+import { gpPrompt, gpConfirm } from '../common/Dialog';
 
 const LANE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#facc15', '#60a5fa', '#4ade80', '#e879f9', '#f87171'];
 const ROW_H = 34;
@@ -658,7 +659,6 @@ export function GitGraph() {
   }, [scrollTop, viewportHeight, visibleRows.length, hasMoreCommits, historyLimit, filters, loadHistory]);
 
   const clear = () => { setSearch(''); setFilters({}); };
-  const ask = (message: string, fallback: string) => prompt(message, fallback)?.trim();
   const commitRevision = (commit: CommitInfo) => commit.hash.trim() || commit.shortHash.trim();
   const runCommitAction = (label: string, commit: CommitInfo, fn: (revision: string) => Promise<unknown>) => {
     const revision = commitRevision(commit);
@@ -684,37 +684,36 @@ export function GitGraph() {
       .map(r => ({ remote: r, local: r.slice(r.indexOf('/') + 1) }))
       .filter(({ local }) => !localBranches.includes(local)); // skip if local already listed
 
-    const checkoutBranch = (name: string) =>
-      repo && void run(`checkout ${name}`, () => gitService.checkoutBranch(repo, name));
+    const checkoutBranch = (name: string) => { if (repo) void run(`checkout ${name}`, () => gitService.checkoutBranch(repo, name)); };
 
     return [
       ...localBranches.map(branch => ({
         label: `Checkout  ${branch}`,
-        action: () => checkoutBranch(branch),
+        action: () => { checkoutBranch(branch); },
       })),
       ...remoteBranches.map(({ remote, local }) => ({
         label: `Checkout  ${local}  ← ${remote}`,
-        action: () => checkoutBranch(local),
+        action: () => { checkoutBranch(local); },
       })),
       {
         label: localBranches.length + remoteBranches.length > 0 ? 'Checkout (detached HEAD)' : 'Checkout this commit',
-        action: () => {
-          if (confirm(`Checkout ${short} in detached HEAD?`))
+        action: async () => {
+          if (await gpConfirm(`Checkout ${short} in detached HEAD?`, true))
             runCommitAction('checkout commit', commit, rev => gitService.checkoutCommit(repo!, rev));
         },
       },
       {
         label: 'Create worktree from this commit',
-        action: () => {
-          const path = ask('Worktree path', `../worktree-${short}`);
+        action: async () => {
+          const path = await gpPrompt('Worktree path', `../worktree-${short}`);
           if (path) runCommitAction('create worktree', commit, rev => gitService.createWorktree(repo!, path, rev, false));
         },
       },
       separator('commit-actions'),
       {
         label: 'Create branch here',
-        action: () => {
-          const name = ask('New branch name', `branch-${short}`);
+        action: async () => {
+          const name = await gpPrompt('New branch name', `branch-${short}`);
           if (name) runCommitAction('branch from commit', commit, rev => gitService.createBranchFromCommit(repo!, name, rev, true));
         },
       },
@@ -724,38 +723,38 @@ export function GitGraph() {
       },
       {
         label: `Rebase ${currentBranch} onto this commit`,
-        action: () => {
-          if (confirm(`Rebase ${currentBranch} onto ${short}?`))
+        action: async () => {
+          if (await gpConfirm(`Rebase ${currentBranch} onto ${short}?`))
             runCommitAction('rebase', commit, rev => gitService.startRebase(repo!, rev));
         },
       },
       {
         label: `Reset ${currentBranch} to this commit: soft`,
-        action: () => {
-          if (confirm(`Soft reset ${currentBranch} to ${short}?`))
+        action: async () => {
+          if (await gpConfirm(`Soft reset ${currentBranch} to ${short}?`))
             runCommitAction('soft reset', commit, rev => gitService.resetToCommit(repo!, rev, 'soft'));
         },
       },
       {
         label: `Reset ${currentBranch} to this commit: mixed`,
-        action: () => {
-          if (confirm(`Mixed reset ${currentBranch} to ${short}?`))
+        action: async () => {
+          if (await gpConfirm(`Mixed reset ${currentBranch} to ${short}?`))
             runCommitAction('mixed reset', commit, rev => gitService.resetToCommit(repo!, rev, 'mixed'));
         },
       },
       {
         label: `Reset ${currentBranch} to this commit: hard`,
         danger: true,
-        action: () => {
-          if (confirm(`Hard reset ${currentBranch} to ${short}? This can discard work.`))
+        action: async () => {
+          if (await gpConfirm(`Hard reset ${currentBranch} to ${short}? This can discard work.`, true))
             runCommitAction('hard reset', commit, rev => gitService.resetToCommit(repo!, rev, 'hard'));
         },
       },
       {
         label: 'Revert commit',
         danger: true,
-        action: () => {
-          if (confirm(`Revert ${short}?`))
+        action: async () => {
+          if (await gpConfirm(`Revert ${short}?`))
             runCommitAction('revert commit', commit, rev => gitService.revertCommit(repo!, rev));
         },
       },
@@ -771,17 +770,17 @@ export function GitGraph() {
       separator('tag-actions'),
       {
         label: 'Create tag here',
-        action: () => {
-          const name = ask('New tag name', `tag-${short}`);
+        action: async () => {
+          const name = await gpPrompt('New tag name', `tag-${short}`);
           if (name) runCommitAction('tag commit', commit, rev => gitService.createTagFromCommit(repo!, name, rev));
         },
       },
       {
         label: 'Create annotated tag here',
-        action: () => {
-          const name = ask('New annotated tag name', `tag-${short}`);
+        action: async () => {
+          const name = await gpPrompt('New annotated tag name', `tag-${short}`);
           if (!name) return;
-          const message = ask('Tag message', name);
+          const message = await gpPrompt('Tag message', name);
           if (message)
             runCommitAction('annotated tag', commit, rev =>
               gitService.createAnnotatedTagFromCommit(repo!, name, message, rev));
@@ -799,11 +798,11 @@ export function GitGraph() {
       items.push({ label: `✓ ${name}`, disabled: true, action: () => undefined });
     } else if (isLocal) {
       items.push({ header: true, label: 'Switch', action: () => undefined });
-      items.push({ label: `Checkout ${name}`, action: () => repo && void run('checkout branch', () => gitService.checkoutBranch(repo!, name)) });
+      items.push({ label: `Checkout ${name}`, action: () => { if (repo) void run('checkout branch', () => gitService.checkoutBranch(repo!, name)); } });
     } else if (isRemote) {
       const local = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
       items.push({ header: true, label: 'Switch', action: () => undefined });
-      items.push({ label: `Checkout ${local} ← ${name}`, action: () => repo && void run('checkout branch', () => gitService.checkoutBranch(repo!, local)) });
+      items.push({ label: `Checkout ${local} ← ${name}`, action: () => { if (repo) void run('checkout branch', () => gitService.checkoutBranch(repo!, local)); } });
     }
 
     // Actions on current branch using this branch
@@ -812,11 +811,11 @@ export function GitGraph() {
       items.push({ header: true, label: 'Actions', action: () => undefined });
       items.push({
         label: `Merge ${name} → ${currentBranch}`,
-        action: () => { if (confirm(`Merge ${name} into ${currentBranch}?`)) repo && void run('merge branch', () => gitService.mergeBranch(repo!, name)); },
+        action: async () => { if (await gpConfirm(`Merge ${name} into ${currentBranch}?`)) repo && void run('merge branch', () => gitService.mergeBranch(repo!, name)); },
       });
       items.push({
         label: `Rebase ${currentBranch} onto ${name}`,
-        action: () => { if (confirm(`Rebase ${currentBranch} onto ${name}?`)) repo && void run('rebase', () => gitService.startRebase(repo!, name)); },
+        action: async () => { if (await gpConfirm(`Rebase ${currentBranch} onto ${name}?`)) repo && void run('rebase', () => gitService.startRebase(repo!, name)); },
       });
     }
 
@@ -826,8 +825,8 @@ export function GitGraph() {
       items.push({ header: true, label: 'Manage', action: () => undefined });
       items.push({
         label: 'Rename branch',
-        action: () => {
-          const next = prompt('New branch name', name)?.trim();
+        action: async () => {
+          const next = await gpPrompt('New branch name', name);
           if (next && repo) void run('rename branch', () => gitService.renameBranch(repo!, name, next));
         },
       });
@@ -835,12 +834,12 @@ export function GitGraph() {
         items.push({
           label: 'Delete branch',
           danger: true,
-          action: () => { if (confirm(`Delete ${name}?`)) repo && void run('delete branch', () => gitService.deleteBranch(repo!, name, false)); },
+          action: async () => { if (await gpConfirm(`Delete ${name}?`, true)) repo && void run('delete branch', () => gitService.deleteBranch(repo!, name, false)); },
         });
         items.push({
           label: 'Force delete branch',
           danger: true,
-          action: () => { if (confirm(`Force delete ${name}?`)) repo && void run('force delete branch', () => gitService.deleteBranch(repo!, name, true)); },
+          action: async () => { if (await gpConfirm(`Force delete ${name}?`, true)) repo && void run('force delete branch', () => gitService.deleteBranch(repo!, name, true)); },
         });
       }
     }

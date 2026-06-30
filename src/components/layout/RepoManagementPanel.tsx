@@ -2,6 +2,7 @@ import { FolderOpen, FolderPlus, GitFork, Trash2, X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
+import { gpPrompt } from '../common/Dialog';
 
 export function RepoManagementPanel() {
   const recent = useGitStore(s => s.recent);
@@ -27,8 +28,8 @@ export function RepoManagementPanel() {
     }
   };
 
-  const handleClone = () => {
-    const url = prompt('Clone URL:')?.trim();
+  const handleClone = async () => {
+    const url = await gpPrompt('Clone URL:');
     if (!url) return;
     open({ directory: true, multiple: false, title: 'Clone into folder' }).then(async parent => {
       if (!parent || Array.isArray(parent)) return;
@@ -68,7 +69,7 @@ export function RepoManagementPanel() {
             <FolderOpen size={13} />
             Open Repo
           </button>
-          <button className="btn flex items-center gap-1.5" onClick={handleClone}>
+          <button className="btn flex items-center gap-1.5" onClick={() => void handleClone()}>
             <GitFork size={13} />
             Clone Repo
           </button>

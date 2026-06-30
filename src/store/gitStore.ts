@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { gitService } from '../services/gitService';
+import { getRepoConfig } from '../utils/repoConfig';
 
 let _autoFetchTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -148,7 +149,9 @@ export const useGitStore = create<State>((set, get) => ({
       await get().refresh();
       // Background fetch — updates remote tracking refs silently after initial load
       void gitService.fetchAll(path).then(() => get().refresh()).catch(() => {});
-      const interval = get().settings?.autoFetchInterval ?? 0;
+      const perRepo = getRepoConfig(path);
+      const globalInterval = get().settings?.autoFetchInterval ?? 0;
+      const interval = perRepo.autoFetchInterval !== undefined ? perRepo.autoFetchInterval : globalInterval;
       startAutoFetch(interval);
     } catch (e) {
       get().log(String((e as Error).message ?? e));

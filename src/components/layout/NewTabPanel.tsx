@@ -2,6 +2,7 @@ import { FolderOpen, GitFork, Plus } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
+import { gpPrompt } from '../common/Dialog';
 
 export function NewTabPanel() {
   const recent = useGitStore(s => s.recent);
@@ -14,8 +15,8 @@ export function NewTabPanel() {
     if (p && !Array.isArray(p)) { await openRepo(p); close(); }
   };
 
-  const handleClone = () => {
-    const url = prompt('Clone URL:')?.trim();
+  const handleClone = async () => {
+    const url = await gpPrompt('Clone URL:');
     if (!url) return;
     open({ directory: true, multiple: false, title: 'Clone into folder' }).then(async parent => {
       if (!parent || Array.isArray(parent)) return;
@@ -63,7 +64,7 @@ export function NewTabPanel() {
           <FolderOpen size={18} className="text-pilot-blue" />
           Open
         </button>
-        <button className={ACTION_BTN} onClick={handleClone}>
+        <button className={ACTION_BTN} onClick={() => void handleClone()}>
           <GitFork size={18} className="text-pilot-blue" />
           Clone
         </button>

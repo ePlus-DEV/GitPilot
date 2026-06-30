@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 export type ContextMenuItem = {
   label: string;
-  action: () => void;
+  action: () => void | Promise<void>;
   disabled?: boolean;
   danger?: boolean;
   separator?: boolean;
@@ -53,8 +53,7 @@ export function ContextMenu({ x, y, title, items, onClose }: Props) {
           className={`block w-full px-3 py-2 text-left hover:bg-[#30363d] disabled:cursor-not-allowed disabled:opacity-40 ${item.danger ? 'text-red-300 hover:bg-red-950/60' : ''}`}
           disabled={item.disabled}
           onClick={() => {
-            item.action();
-            onClose();
+            void Promise.resolve(item.action()).then(onClose);
           }}
         >
           {item.label}

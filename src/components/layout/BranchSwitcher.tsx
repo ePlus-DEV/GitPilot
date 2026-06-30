@@ -48,16 +48,17 @@ export function BranchSwitcher() {
       <button
         onClick={() => setOpen(v => !v)}
         className="flex items-center gap-1.5 rounded border border-pilot-line bg-[#21262d] px-2.5 py-1 text-xs transition-colors hover:border-[#484f58]"
+        title={branch}
       >
         <GitBranch size={12} className="shrink-0 text-pilot-blue" />
-        <span className="max-w-[180px] truncate font-medium">{branch}</span>
+        <span className="max-w-[260px] truncate font-medium">{branch}</span>
         {behind > 0 && <span className="text-[10px] text-amber-400">↓{behind}</span>}
         {ahead > 0 && <span className="text-[10px] text-emerald-400">↑{ahead}</span>}
         <ChevronDown size={11} className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-[300px] overflow-hidden rounded-lg border border-[#30363d] bg-[#161b22] shadow-2xl shadow-black/60">
+        <div className="absolute left-0 top-full z-50 mt-1 min-w-[260px] max-w-[480px] overflow-hidden rounded-lg border border-[#30363d] bg-[#161b22] shadow-2xl shadow-black/60" style={{ width: 'max-content' }}>
           <div className="border-b border-[#21262d] p-2">
             <div className="relative">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -112,7 +113,7 @@ function BranchRow({ branch, onSelect }: { branch: BranchInfo; onSelect: () => v
       }`}
     >
       <GitBranch size={11} className={branch.current ? 'text-pilot-blue shrink-0' : 'text-slate-500 shrink-0'} />
-      <span className="min-w-0 flex-1 truncate">{branch.name}</span>
+      <span className="min-w-0 flex-1 break-all leading-snug">{branch.name}</span>
       {branch.ahead > 0 && <span className="text-[10px] text-emerald-400">↑{branch.ahead}</span>}
       {branch.behind > 0 && <span className="text-[10px] text-amber-400">↓{branch.behind}</span>}
       {branch.current && <Check size={11} className="shrink-0 text-pilot-blue" />}
