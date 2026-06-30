@@ -12,7 +12,9 @@
     "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
     "test": "npm run test:welcome && npm run typecheck && npm run test:rust",
-    "test:welcome": "node --test scripts/welcomeSetupUtils.test.mjs"
+    "test:welcome": "node --test scripts/welcomeSetupUtils.test.mjs",
+    "test:ui": "vitest",
+    "test:ui:run": "vitest run"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",

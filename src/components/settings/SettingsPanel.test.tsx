@@ -1,25 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsPanel } from './SettingsPanel';
 import type { Settings } from '../../types/git';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-const mockSaveSettings = vi.fn();
+const { mockSaveSettings, mockSetState, mockStartAutoFetch } = vi.hoisted(() => ({
+  mockSaveSettings: vi.fn(),
+  mockSetState: vi.fn(),
+  mockStartAutoFetch: vi.fn(),
+}));
 
 vi.mock('../../services/gitService', () => ({
-  gitService: {
-    saveSettings: mockSaveSettings,
-  },
+  gitService: { saveSettings: mockSaveSettings },
 }));
 
-vi.mock('../../store/gitStore', () => ({
-  useGitStore: vi.fn(),
-  startAutoFetch: vi.fn(),
-}));
+vi.mock('../../store/gitStore', () => {
+  const useGitStore = Object.assign(vi.fn(), { setState: mockSetState });
+  return { useGitStore, startAutoFetch: mockStartAutoFetch };
+});
 
-const { useGitStore, startAutoFetch } = await import('../../store/gitStore');
+const { useGitStore } = await import('../../store/gitStore');
 const mockUseGitStore = vi.mocked(useGitStore);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -38,21 +40,10 @@ const defaultSettings: Settings = {
   updateChannel: 'stable',
 };
 
-function buildStoreState(overrides: Partial<{ settings: Settings; settingsTab: string }> = {}) {
-  return {
-    settings: defaultSettings,
-    settingsTab: 'general',
-    ...overrides,
-  };
-}
-
-function setupStore(overrides?: Partial<{ settings: Settings; settingsTab: string }>) {
-  const state = buildStoreState(overrides);
-  mockUseGitStore.mockImplementation((selector: (s: unknown) => unknown) =>
-    selector(state) as ReturnType<typeof selector>,
-  );
-  // Also handle the setState call pattern
-  (useGitStore as unknown as { setState: ReturnType<typeof vi.fn> }).setState = vi.fn();
+function setupStore(overrides: Partial<{ settings: Settings; settingsTab: string }> = {}) {
+  const state = { settings: defaultSettings, settingsTab: 'general', ...overrides };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mockUseGitStore.mockImplementation((selector: any) => selector(state));
 }
 
 function renderPanel() {
@@ -64,6 +55,7 @@ function renderPanel() {
 describe('SettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSetState.mockReset();
     mockSaveSettings.mockResolvedValue(defaultSettings);
     setupStore();
   });
@@ -73,7 +65,8 @@ describe('SettingsPanel', () => {
   describe('initial render', () => {
     it('renders without crashing', () => {
       renderPanel();
-      expect(screen.getByText('General')).toBeInTheDocument();
+      // "General" appears in both sidebar button and header — check header specifically
+      expect(screen.getByRole('heading', { level: 2, name: 'General' })).toBeInTheDocument();
     });
 
     it('renders all four sidebar tabs', () => {
@@ -85,84 +78,76 @@ describe('SettingsPanel', () => {
     });
 
     it('returns null when settings is undefined', () => {
-      mockUseGitStore.mockImplementation((selector: (s: unknown) => unknown) =>
-        selector({ settings: undefined, settingsTab: 'general' }) as ReturnType<typeof selector>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mockUseGitStore.mockImplementation((selector: any) =>
+        selector({ settings: undefined, settingsTab: 'general' }),
       );
       const { container } = renderPanel();
       expect(container.firstChild).toBeNull();
     });
 
-    it('shows save and cancel buttons on non-about tabs', () => {
+    it('shows Save Settings and Cancel buttons on non-about tabs', () => {
       renderPanel();
-      expect(screen.getByRole('button', { name: /save settings/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save Settings' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     });
   });
 
   // ── General tab ────────────────────────────────────────────────────────────
 
   describe('General tab', () => {
-    it('shows auto-fetch interval select with correct default', () => {
+    it('shows auto-fetch interval select defaulting to Disabled', () => {
       renderPanel();
-      const select = screen.getByDisplayValue(/disabled/i);
-      expect(select).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Disabled')).toBeInTheDocument();
     });
 
     it('shows all auto-fetch interval options', () => {
       renderPanel();
-      const options = screen.getAllByRole('option', { name: /disabled|second|minute/i });
-      expect(options.length).toBeGreaterThanOrEqual(5);
+      const expected = ['Disabled', '30 seconds', '1 minute', '5 minutes', '10 minutes', '30 minutes'];
+      for (const label of expected) {
+        expect(screen.getByRole('option', { name: label })).toBeInTheDocument();
+      }
     });
 
-    it('shows update channel select defaulting to Stable', () => {
+    it('shows update channel defaulting to Stable', () => {
       renderPanel();
-      expect(screen.getByDisplayValue(/stable/i)).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Stable')).toBeInTheDocument();
     });
 
     it('shows alpha option in update channel select', () => {
       renderPanel();
-      expect(screen.getByRole('option', { name: /alpha/i })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Alpha (early access)' })).toBeInTheDocument();
     });
 
-    it('shows default target branch input', () => {
+    it('shows default target branch input with current value', () => {
       renderPanel();
-      const input = screen.getByPlaceholderText('main');
-      expect(input).toBeInTheDocument();
-      expect(input).toHaveValue('main');
+      expect(screen.getByPlaceholderText('main')).toHaveValue('main');
     });
 
     it('reflects non-default settings values', () => {
       setupStore({
-        settings: {
-          ...defaultSettings,
-          autoFetchInterval: 300,
-          updateChannel: 'alpha',
-          defaultTargetBranch: 'master',
-        },
+        settings: { ...defaultSettings, autoFetchInterval: 300, updateChannel: 'alpha', defaultTargetBranch: 'master' },
       });
       renderPanel();
       expect(screen.getByDisplayValue('5 minutes')).toBeInTheDocument();
-      expect(screen.getByDisplayValue(/alpha/i)).toBeInTheDocument();
-      expect(screen.getByDisplayValue('master')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Alpha (early access)')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('main')).toHaveValue('master');
     });
   });
 
   // ── Git tab ────────────────────────────────────────────────────────────────
 
   describe('Git tab', () => {
-    beforeEach(() => setupStore({ settingsTab: 'git' }));
-
-    it('shows git path input', () => {
+    it('shows git path input with current value', () => {
+      setupStore({ settingsTab: 'git' });
       renderPanel();
-      const input = screen.getByPlaceholderText('git');
-      expect(input).toBeInTheDocument();
-      expect(input).toHaveValue('git');
+      expect(screen.getByPlaceholderText('git')).toHaveValue('git');
     });
 
     it('shows custom git path when configured', () => {
       setupStore({ settingsTab: 'git', settings: { ...defaultSettings, gitPath: '/usr/local/bin/git' } });
       renderPanel();
-      expect(screen.getByDisplayValue('/usr/local/bin/git')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('git')).toHaveValue('/usr/local/bin/git');
     });
   });
 
@@ -171,17 +156,16 @@ describe('SettingsPanel', () => {
   describe('AI tab', () => {
     beforeEach(() => setupStore({ settingsTab: 'ai' }));
 
-    it('shows provider select', () => {
+    it('shows provider select with current provider', () => {
       renderPanel();
       expect(screen.getByDisplayValue('ollama')).toBeInTheDocument();
     });
 
     it('lists all AI providers', () => {
       renderPanel();
-      const options = screen.getAllByRole('option').filter(o =>
-        ['ollama', 'openai', 'anthropic', 'groq'].includes(o.textContent ?? ''),
-      );
-      expect(options).toHaveLength(4);
+      for (const p of ['ollama', 'openai', 'anthropic', 'groq']) {
+        expect(screen.getByRole('option', { name: p })).toBeInTheDocument();
+      }
     });
 
     it('shows API key input as password field', () => {
@@ -195,7 +179,7 @@ describe('SettingsPanel', () => {
       expect(screen.getByDisplayValue('llama3')).toBeInTheDocument();
     });
 
-    it('shows model placeholder', () => {
+    it('shows model placeholder when model is empty', () => {
       setupStore({ settingsTab: 'ai', settings: { ...defaultSettings, aiModel: '' } });
       renderPanel();
       expect(screen.getByPlaceholderText(/llama3/i)).toBeInTheDocument();
@@ -209,96 +193,95 @@ describe('SettingsPanel', () => {
 
     it('renders the app name', () => {
       renderPanel();
-      expect(screen.getByText(/PILOT/i)).toBeInTheDocument();
+      expect(screen.getByText('Visual Git Client')).toBeInTheDocument();
     });
 
-    it('shows version after getVersion resolves', async () => {
+    it('shows version string after getVersion resolves', async () => {
       renderPanel();
       await waitFor(() => {
         expect(screen.getByText(/v0\.1\.0-alpha/i)).toBeInTheDocument();
       });
     });
 
-    it('does not show Save Settings button on about tab', () => {
+    it('does not show Save Settings or Cancel buttons', () => {
       renderPanel();
-      expect(screen.queryByRole('button', { name: /save settings/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Save Settings' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    });
+
+    it('shows built-with text', () => {
+      renderPanel();
+      expect(screen.getByText(/tauri/i)).toBeInTheDocument();
     });
   });
 
-  // ── Field interactions ─────────────────────────────────────────────────────
+  // ── Field interactions (dispatch to store) ────────────────────────────────
 
-  describe('field editing', () => {
-    it('updates local settings state when auto-fetch interval changes', async () => {
+  describe('field editing dispatches to store', () => {
+    it('auto-fetch interval change calls useGitStore.setState with new value', async () => {
       const user = userEvent.setup();
       renderPanel();
-      const select = screen.getByDisplayValue(/disabled/i);
+      const select = screen.getByDisplayValue('Disabled');
       await user.selectOptions(select, '60');
-      // After change, "1 minute" should be selected
-      expect(screen.getByDisplayValue('1 minute')).toBeInTheDocument();
+      expect(mockSetState).toHaveBeenCalledWith({
+        settings: expect.objectContaining({ autoFetchInterval: 60 }),
+      });
     });
 
-    it('updates local settings state when update channel changes to alpha', async () => {
+    it('update channel change calls useGitStore.setState', async () => {
       const user = userEvent.setup();
       renderPanel();
-      const select = screen.getByDisplayValue(/stable/i);
-      await user.selectOptions(select, 'alpha');
-      expect(screen.getByDisplayValue(/alpha/i)).toBeInTheDocument();
+      await user.selectOptions(screen.getByDisplayValue('Stable'), 'alpha');
+      expect(mockSetState).toHaveBeenCalledWith({
+        settings: expect.objectContaining({ updateChannel: 'alpha' }),
+      });
     });
 
-    it('updates default target branch on input', async () => {
-      const user = userEvent.setup();
+    it('default target branch input calls useGitStore.setState', () => {
       renderPanel();
-      const input = screen.getByPlaceholderText('main');
-      await user.clear(input);
-      await user.type(input, 'develop');
-      expect(input).toHaveValue('develop');
+      fireEvent.change(screen.getByPlaceholderText('main'), { target: { value: 'develop' } });
+      expect(mockSetState).toHaveBeenCalledWith({
+        settings: expect.objectContaining({ defaultTargetBranch: 'develop' }),
+      });
     });
 
-    it('updates git path on input', async () => {
-      const user = userEvent.setup();
+    it('git path input calls useGitStore.setState', () => {
       setupStore({ settingsTab: 'git' });
       renderPanel();
-      const input = screen.getByPlaceholderText('git');
-      await user.clear(input);
-      await user.type(input, '/usr/bin/git');
-      expect(input).toHaveValue('/usr/bin/git');
+      fireEvent.change(screen.getByPlaceholderText('git'), { target: { value: '/usr/bin/git' } });
+      expect(mockSetState).toHaveBeenCalledWith({
+        settings: expect.objectContaining({ gitPath: '/usr/bin/git' }),
+      });
     });
 
-    it('updates AI model on input', async () => {
+    it('AI provider change calls useGitStore.setState', async () => {
       const user = userEvent.setup();
       setupStore({ settingsTab: 'ai' });
       renderPanel();
-      const input = screen.getByDisplayValue('llama3');
-      await user.clear(input);
-      await user.type(input, 'gpt-4o');
-      expect(input).toHaveValue('gpt-4o');
+      await user.selectOptions(screen.getByDisplayValue('ollama'), 'openai');
+      expect(mockSetState).toHaveBeenCalledWith({
+        settings: expect.objectContaining({ aiProvider: 'openai' }),
+      });
+    });
+
+    it('AI model input calls useGitStore.setState', () => {
+      setupStore({ settingsTab: 'ai' });
+      renderPanel();
+      fireEvent.change(screen.getByDisplayValue('llama3'), { target: { value: 'gpt-4o' } });
+      expect(mockSetState).toHaveBeenCalledWith({
+        settings: expect.objectContaining({ aiModel: 'gpt-4o' }),
+      });
     });
   });
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
   describe('save', () => {
-    it('calls gitService.saveSettings with current settings on save', async () => {
+    it('calls gitService.saveSettings with current store settings', async () => {
       const user = userEvent.setup();
       renderPanel();
-      await user.click(screen.getByRole('button', { name: /save settings/i }));
-      await waitFor(() => {
-        expect(mockSaveSettings).toHaveBeenCalledWith(defaultSettings);
-      });
-    });
-
-    it('calls saveSettings with edited values', async () => {
-      const user = userEvent.setup();
-      renderPanel();
-      const input = screen.getByPlaceholderText('main');
-      await user.clear(input);
-      await user.type(input, 'develop');
-      await user.click(screen.getByRole('button', { name: /save settings/i }));
-      await waitFor(() => {
-        expect(mockSaveSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ defaultTargetBranch: 'develop' }),
-        );
-      });
+      await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+      await waitFor(() => expect(mockSaveSettings).toHaveBeenCalledWith(defaultSettings));
     });
 
     it('shows Saving… while save is in progress', async () => {
@@ -307,116 +290,107 @@ describe('SettingsPanel', () => {
       );
       const user = userEvent.setup();
       renderPanel();
-      await user.click(screen.getByRole('button', { name: /save settings/i }));
+      await user.click(screen.getByRole('button', { name: 'Save Settings' }));
       expect(screen.getByText('Saving…')).toBeInTheDocument();
     });
 
-    it('calls startAutoFetch with the saved interval after save', async () => {
+    it('Save button is disabled while saving', async () => {
+      mockSaveSettings.mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve(defaultSettings), 200)),
+      );
+      const user = userEvent.setup();
+      renderPanel();
+      await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+      expect(screen.getByText('Saving…').closest('button')).toBeDisabled();
+    });
+
+    it('calls startAutoFetch with saved interval after successful save', async () => {
       const savedSettings = { ...defaultSettings, autoFetchInterval: 300 };
       mockSaveSettings.mockResolvedValue(savedSettings);
       const user = userEvent.setup();
       renderPanel();
-      await user.click(screen.getByRole('button', { name: /save settings/i }));
-      await waitFor(() => {
-        expect(vi.mocked(startAutoFetch)).toHaveBeenCalledWith(300);
-      });
+      await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+      await waitFor(() => expect(mockStartAutoFetch).toHaveBeenCalledWith(300));
     });
 
-    it('closes the panel (settingsOpen: false) after successful save', async () => {
+    it('closes panel (settingsOpen: false) after successful save', async () => {
       const user = userEvent.setup();
       renderPanel();
-      await user.click(screen.getByRole('button', { name: /save settings/i }));
-      await waitFor(() => {
-        expect(useGitStore.setState).toHaveBeenCalledWith(
+      await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+      await waitFor(() =>
+        expect(mockSetState).toHaveBeenCalledWith(
           expect.objectContaining({ settingsOpen: false }),
-        );
-      });
+        ),
+      );
+    });
+
+    it('stores saved settings back into store after save', async () => {
+      const savedSettings = { ...defaultSettings, gitPath: '/usr/bin/git' };
+      mockSaveSettings.mockResolvedValue(savedSettings);
+      const user = userEvent.setup();
+      renderPanel();
+      await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+      await waitFor(() =>
+        expect(mockSetState).toHaveBeenCalledWith(
+          expect.objectContaining({ settings: savedSettings }),
+        ),
+      );
     });
   });
 
   // ── Cancel ─────────────────────────────────────────────────────────────────
 
   describe('cancel', () => {
-    it('sets settingsOpen to false on cancel', async () => {
+    it('sets settingsOpen to false', async () => {
       const user = userEvent.setup();
       renderPanel();
-      await user.click(screen.getByRole('button', { name: /cancel/i }));
-      expect(useGitStore.setState).toHaveBeenCalledWith({ settingsOpen: false });
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(mockSetState).toHaveBeenCalledWith({ settingsOpen: false });
     });
 
-    it('does not call saveSettings on cancel', async () => {
+    it('does not call saveSettings', async () => {
       const user = userEvent.setup();
       renderPanel();
-      await user.click(screen.getByRole('button', { name: /cancel/i }));
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(mockSaveSettings).not.toHaveBeenCalled();
     });
   });
 
-  // ── Close button ───────────────────────────────────────────────────────────
+  // ── Close (X) button ───────────────────────────────────────────────────────
 
-  describe('close button (X)', () => {
-    it('closes panel when X button is clicked', async () => {
+  describe('close (X) button in header', () => {
+    it('sets settingsOpen to false', async () => {
       const user = userEvent.setup();
       renderPanel();
-      // The X button is in the header — find by its accessible position
-      const closeBtn = screen.getAllByRole('button').find(
-        btn => btn.querySelector('svg') && btn.closest('div')?.classList.contains('flex-1'),
-      );
-      // Fallback: find the button that calls setState directly
-      const xBtn = screen.getAllByRole('button').find(btn =>
-        btn.getAttribute('type') === 'button' &&
-        btn.closest('[class*="justify-between"]') !== null,
-      );
-      if (xBtn) await user.click(xBtn);
-      // Either way, panel should request close
+      // X button is in the header, alongside the tab title
+      const header = screen.getByRole('heading', { level: 2 });
+      const xBtn = header.closest('div')!.querySelector('button')!;
+      await user.click(xBtn);
+      expect(mockSetState).toHaveBeenCalledWith({ settingsOpen: false });
     });
   });
 
-  // ── Tab switching ──────────────────────────────────────────────────────────
-
-  describe('tab navigation', () => {
-    it('clicking Git tab changes displayed content', async () => {
-      const user = userEvent.setup();
-      // settingsTab is controlled by the store; simulate it by re-rendering with new tab
-      setupStore({ settingsTab: 'git' });
-      renderPanel();
-      expect(screen.getByPlaceholderText('git')).toBeInTheDocument();
-    });
-
-    it('clicking AI tab shows AI fields', async () => {
-      setupStore({ settingsTab: 'ai' });
-      renderPanel();
-      expect(screen.getByDisplayValue('ollama')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText(/sk-/i)).toBeInTheDocument();
-    });
-
-    it('clicking About tab hides save footer', () => {
-      setupStore({ settingsTab: 'about' });
-      renderPanel();
-      expect(screen.queryByRole('button', { name: /save settings/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument();
-    });
-  });
-
-  // ── Auto-fetch options completeness ───────────────────────────────────────
+  // ── Auto-fetch option values ───────────────────────────────────────────────
 
   describe('auto-fetch option values', () => {
-    it('has the Disabled option with value 0', () => {
+    it('Disabled option has value 0', () => {
       renderPanel();
-      const opt = screen.getByRole('option', { name: 'Disabled' }) as HTMLOptionElement;
-      expect(opt.value).toBe('0');
+      expect((screen.getByRole('option', { name: 'Disabled' }) as HTMLOptionElement).value).toBe('0');
     });
 
-    it('has 30-second option', () => {
+    it('30 seconds option has value 30', () => {
       renderPanel();
-      const opt = screen.getByRole('option', { name: '30 seconds' }) as HTMLOptionElement;
-      expect(opt.value).toBe('30');
+      expect((screen.getByRole('option', { name: '30 seconds' }) as HTMLOptionElement).value).toBe('30');
     });
 
-    it('has 30-minute option', () => {
+    it('1 minute option has value 60', () => {
       renderPanel();
-      const opt = screen.getByRole('option', { name: '30 minutes' }) as HTMLOptionElement;
-      expect(opt.value).toBe('1800');
+      expect((screen.getByRole('option', { name: '1 minute' }) as HTMLOptionElement).value).toBe('60');
+    });
+
+    it('30 minutes option has value 1800', () => {
+      renderPanel();
+      expect((screen.getByRole('option', { name: '30 minutes' }) as HTMLOptionElement).value).toBe('1800');
     });
   });
 });
