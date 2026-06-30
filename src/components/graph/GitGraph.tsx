@@ -88,7 +88,7 @@ function GraphLayer({
 }) {
   const [nodeGhost, setNodeGhost] = useState<{ x: number; y: number; color: string; label: string } | null>(null);
   const [hoveredLane, setHoveredLane] = useState<number | null>(null);
-  const svgH = rows.length * ROW_H;
+  const svgH = rows.length * ROW_H + ROW_H;
 
   // Opacity helpers — activeLane < 0 means "no focus, show everything equally"
   const lineO = (col: number) => {
@@ -577,7 +577,8 @@ export function GitGraph() {
   const [viewportHeight, setViewportHeight] = useState(600);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: CommitInfo }>();
   const [branchMenu, setBranchMenu] = useState<{ x: number; y: number; name: string; local: boolean; remote: boolean }>();
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const [listEl, setListEl] = useState<HTMLDivElement | null>(null);
+  const listRefCb = useCallback((el: HTMLDivElement | null) => setListEl(el), []);
   const didMountRef = useRef(false);
   const lastAutoScrolledHashRef = useRef<string | undefined>();
 
@@ -850,27 +851,25 @@ export function GitGraph() {
   };
 
   useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const update = () => setViewportHeight(list.clientHeight || 600);
+    if (!listEl) return;
+    const update = () => setViewportHeight(listEl.clientHeight || 600);
     update();
     const ro = new ResizeObserver(update);
-    ro.observe(list);
+    ro.observe(listEl);
     return () => ro.disconnect();
-  }, []);
+  }, [listEl]);
 
   useEffect(() => {
-    const list = listRef.current;
-    if (!list || !selectedCommit) return;
+    if (!listEl || !selectedCommit) return;
     if (lastAutoScrolledHashRef.current === selectedCommit.hash) return;
     const idx = visibleRows.findIndex(row => row.commit.hash === selectedCommit.hash);
     if (idx === -1) return;
     lastAutoScrolledHashRef.current = selectedCommit.hash;
-    const rowTop = idx * ROW_H;
+    const rowTop = idx * ROW_H + (changedCount > 0 ? ROW_H : 0);
     const rowBottom = rowTop + ROW_H;
-    if (rowTop < list.scrollTop) list.scrollTop = rowTop;
-    else if (rowBottom > list.scrollTop + list.clientHeight) list.scrollTop = rowBottom - list.clientHeight;
-  }, [selectedCommit?.hash, visibleRows]);
+    if (rowTop < listEl.scrollTop) listEl.scrollTop = rowTop;
+    else if (rowBottom > listEl.scrollTop + listEl.clientHeight) listEl.scrollTop = rowBottom - listEl.clientHeight;
+  }, [selectedCommit?.hash, visibleRows, listEl, changedCount]);
 
   if (history.length === 0) {
     return (
@@ -982,7 +981,7 @@ export function GitGraph() {
 
       {/* Commit list */}
       <div
-        ref={listRef}
+        ref={listRefCb}
         className="min-h-0 flex-1 select-none overflow-auto [overflow-anchor:none]"
         onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
       >
