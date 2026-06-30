@@ -11,6 +11,7 @@ import { gpPrompt, gpConfirm, gpAlert } from '../common/Dialog';
 export function TopBar() {
   const repo = useGitStore(s => s.repo);
   const busy = useGitStore(s => s.busy);
+  const refreshing = useGitStore(s => s.refreshing);
   const run = useGitStore(s => s.run);
   const branches = useGitStore(s => s.branches);
   const stashes = useGitStore(s => s.stashes);
@@ -78,7 +79,7 @@ export function TopBar() {
         <div className="flex shrink-0 items-center gap-0.5">
           {/* Undo / Redo group */}
           <Btn icon={<Undo2 size={15} />} label="Undo" disabled={busy} title="Undo last action" onClick={() => p && run('undo', () => gitService.resetToCommit(p, 'HEAD~1', 'soft'))} />
-          <Btn icon={<RefreshCw size={15} className={busy ? 'animate-spin text-pilot-blue' : ''} />} label="Redo" disabled={busy} title="Refresh" onClick={() => void useGitStore.getState().refresh()} />
+          <Btn icon={<RefreshCw size={15} className={refreshing ? 'animate-spin text-pilot-blue' : ''} />} label="Redo" disabled={busy} title="Refresh" onClick={() => void useGitStore.getState().refresh()} />
 
           <Sep />
 

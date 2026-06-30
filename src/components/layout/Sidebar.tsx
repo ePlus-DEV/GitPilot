@@ -55,6 +55,7 @@ export function Sidebar() {
       separator('remote-actions'),
       { label: 'Rename branch', disabled: !canWriteLocal, action: async () => { const next = await gpPrompt('New branch name', branch.name); if (next && repo) void run('rename branch', () => gitService.renameBranch(repo, branch.name, next)); } },
       { label: `Push to ${remoteName}`, disabled: !canWriteLocal, action: () => { if (repo) void run('push branch', () => gitService.pushNewBranch(repo, remoteName, branch.name)); } },
+      { label: `Pull from ${remoteName}`, disabled: !branch.current, action: () => { if (repo) void run('pull', () => gitService.pull(repo)); } },
       { label: `Fetch ${remoteName}`, action: () => { if (repo) void run('fetch', () => gitService.fetch(repo, remoteName)); } },
       separator('delete-actions'),
       { label: 'Delete branch', danger: true, disabled: !canWriteLocal || branch.current, action: async () => { if (await gpConfirm(`Delete ${branch.name}?`, true)) { if (repo) void run('delete branch', () => gitService.deleteBranch(repo, branch.name, false)); } } },

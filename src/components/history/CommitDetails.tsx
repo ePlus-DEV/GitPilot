@@ -1,5 +1,5 @@
 import { GitBranch, GitCompare, RotateCcw, Tag, Undo2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { gpPrompt, gpConfirm } from '../common/Dialog';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { useGitStore } from '../../store/gitStore';
@@ -56,13 +56,17 @@ export function CommitDetails() {
 
         <div className="mt-3 grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[11px]">
           <span className="font-semibold uppercase text-slate-500">Author</span>
-          <span className="truncate text-slate-300">{commit.author}</span>
+          <CopySpan value={`${commit.author} <${commit.authorEmail}>`} label="author" mono={false}>
+            {commit.author} <span className="text-slate-500">&lt;{commit.authorEmail}&gt;</span>
+          </CopySpan>
           <span className="font-semibold uppercase text-slate-500">Date</span>
-          <span className="truncate text-slate-300">{commit.date}</span>
+          <CopySpan value={commit.date} label="date">{commit.date}</CopySpan>
           <span className="font-semibold uppercase text-slate-500">SHA</span>
-          <span className="truncate font-mono text-slate-300" title={revision}>{revision}</span>
+          <CopySpan value={revision} label="sha" mono title={revision}>{revision}</CopySpan>
           <span className="font-semibold uppercase text-slate-500">Parents</span>
-          <span className="truncate text-slate-300">{commit.parents.length ? commit.parents.map(p => p.slice(0, 7)).join(', ') : '0'}</span>
+          <CopySpan value={commit.parents.join(' ')} label="parents">
+            {commit.parents.length ? commit.parents.map(p => p.slice(0, 7)).join(', ') : '—'}
+          </CopySpan>
         </div>
       </div>
 
@@ -131,5 +135,19 @@ export function CommitDetails() {
         />
       )}
     </section>
+  );
+}
+
+function CopySpan({ value, label, children, mono = false, title }: { value: string; label: string; children: ReactNode; mono?: boolean; title?: string }) {
+  const log = useGitStore(s => s.log);
+  const copy = () => void navigator.clipboard.writeText(value).then(() => log(`Copied ${label}: ${value}`));
+  return (
+    <button
+      onClick={copy}
+      title={title ?? `Click to copy ${label}`}
+      className={`truncate text-left text-slate-300 hover:text-pilot-blue transition-colors ${mono ? 'font-mono' : ''}`}
+    >
+      {children}
+    </button>
   );
 }

@@ -35,8 +35,8 @@ fn parse_stat_output(out: &str) -> std::collections::HashMap<String, (u32, u32)>
 fn parse_history_output(out: &str) -> Vec<CommitInfo> {
     out.lines()
         .filter_map(|l| {
-            let p: Vec<_> = l.splitn(7, '\x1f').collect();
-            if p.len() < 7 {
+            let p: Vec<_> = l.splitn(8, '\x1f').collect();
+            if p.len() < 8 {
                 return None;
             }
             let graph_and_hash = p[0].trim_end();
@@ -56,15 +56,16 @@ fn parse_history_output(out: &str) -> Vec<CommitInfo> {
                 short_hash: p[1].into(),
                 parents: p[2].split_whitespace().map(|s| s.into()).collect(),
                 author: p[3].into(),
-                date: p[4].into(),
-                refs: p[5]
+                author_email: p[4].into(),
+                date: p[5].into(),
+                refs: p[6]
                     .trim_matches(|c| c == '(' || c == ')' || c == ' ')
                     .split(',')
                     .filter(|s| !s.trim().is_empty())
                     .map(|s| s.trim().into())
                     .collect(),
-                message: p[6].into(),
-                head: p[5].contains("HEAD"),
+                message: p[7].into(),
+                head: p[6].contains("HEAD"),
                 graph,
                 insertions: 0,
                 deletions: 0,
@@ -113,7 +114,7 @@ pub fn get_history(
     keyword: Option<String>,
     file_path: Option<String>,
 ) -> Result<Vec<CommitInfo>, GitError> {
-    let fmt = "%H%x1f%h%x1f%P%x1f%an%x1f%ad%x1f%d%x1f%s";
+    let fmt = "%H%x1f%h%x1f%P%x1f%an%x1f%ae%x1f%ad%x1f%d%x1f%s";
     let max_count = format!("--max-count={limit}");
     let skip_arg = skip.filter(|&s| s > 0).map(|s| format!("--skip={s}"));
     let pretty = format!("--pretty=format:{fmt}");

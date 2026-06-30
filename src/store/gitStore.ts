@@ -74,6 +74,7 @@ type State = {
   problems: string[];
   aiText: string;
   busy: boolean;
+  refreshing: boolean;
   historyLimit: number;
   historyFilters: HistoryFilters;
   openRepo: (path: string) => Promise<void>;
@@ -118,6 +119,7 @@ export const useGitStore = create<State>((set, get) => ({
   problems: [],
   aiText: '',
   busy: false,
+  refreshing: false,
   historyLimit: 500,
   historyFilters: {},
 
@@ -187,7 +189,7 @@ export const useGitStore = create<State>((set, get) => ({
   refresh: async () => {
     const repo = get().repo;
     if (!repo) return;
-    set({ busy: true });
+    set({ busy: true, refreshing: true });
     try {
       const filters = get().historyFilters;
       const limit = get().historyLimit;
@@ -206,7 +208,7 @@ export const useGitStore = create<State>((set, get) => ({
     } catch (e) {
       get().log(String((e as Error).message ?? e));
     } finally {
-      set({ busy: false });
+      set({ busy: false, refreshing: false });
     }
   },
 

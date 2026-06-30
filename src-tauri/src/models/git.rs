@@ -95,6 +95,7 @@ pub struct CommitInfo {
     pub short_hash: String,
     pub parents: Vec<String>,
     pub author: String,
+    pub author_email: String,
     pub date: String,
     pub message: String,
     pub refs: Vec<String>,
