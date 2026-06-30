@@ -1,10 +1,21 @@
 import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { Archive, FolderGit2, GitBranch, GitMerge, Globe, RotateCcw, Search, Tag, Trash2, X } from 'lucide-react';
+import { Archive, FolderGit2, GitBranch, GitMerge, Globe, RotateCcw, Search, Settings2, Tag, Trash2, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
-import { useGitStore } from '../../store/gitStore';
+import { useGitStore, startAutoFetch } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 import type { BranchInfo } from '../../types/git';
 import { gpPrompt, gpConfirm } from '../common/Dialog';
+import { getRepoConfig, setRepoConfig } from '../../utils/repoConfig';
+
+const FETCH_OPTIONS = [
+  { label: 'Inherit global', value: -1 },
+  { label: 'Disabled',       value: 0 },
+  { label: '30 seconds',     value: 30 },
+  { label: '1 minute',       value: 60 },
+  { label: '5 minutes',      value: 300 },
+  { label: '10 minutes',     value: 600 },
+  { label: '30 minutes',     value: 1800 },
+];
 
 export function Sidebar() {
   const recent = useGitStore(s => s.recent);
@@ -18,6 +29,8 @@ export function Sidebar() {
   const closeRepo = useGitStore(s => s.closeRepo);
   const run = useGitStore(s => s.run);
   const [branchMenu, setBranchMenu] = useState<{ x: number; y: number; branch: BranchInfo }>();
+  const [configPath, setConfigPath] = useState<string | null>(null);
+  const globalFetchInterval = useGitStore(s => s.settings?.autoFetchInterval ?? 0);
   const repo = repoInfo?.path;
 
   const removeRecent = async (path: string) => {
@@ -73,16 +86,49 @@ export function Sidebar() {
       <Section icon={<FolderGit2 size={15} />} title="Repositories" count={recent.length} defaultOpen grow={false} color="#64748b">
         {() => recent.length === 0
           ? <div className="px-3 py-1 text-[11px] text-slate-500">No recent repos</div>
-          : recent.map(r => (
-            <SidebarRow
-              key={r}
-              label={r.split(/[\\/]/).pop() ?? r}
-              title={r}
-              onClick={() => void openRepo(r)}
-              active={repoInfo?.path === r}
-              onDelete={() => void removeRecent(r)}
-            />
-          ))
+          : recent.map(r => {
+            const name = r.split(/[\\/]/).pop() ?? r;
+            const isActive = repoInfo?.path === r;
+            const showCfg = configPath === r;
+            const cfg = getRepoConfig(r);
+            const cfgVal = cfg.autoFetchInterval !== undefined ? cfg.autoFetchInterval : -1;
+            const globalLabel = globalFetchInterval <= 0 ? 'off' : (FETCH_OPTIONS.find(o => o.value === globalFetchInterval)?.label ?? `${globalFetchInterval}s`);
+            return (
+              <div key={r}>
+                <SidebarRow
+                  label={name}
+                  title={r}
+                  onClick={() => void openRepo(r)}
+                  active={isActive}
+                  onAction={() => setConfigPath(showCfg ? null : r)}
+                  actionIcon={<Settings2 size={11} className={showCfg ? 'text-pilot-blue' : ''} />}
+                  actionTitle="Per-repo auto-fetch"
+                  onDelete={() => void removeRecent(r)}
+                />
+                {showCfg && (
+                  <div className="mx-3 mb-2 rounded border border-[#30363d] bg-[#080d14] p-2">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-slate-400">Auto-fetch — repo override</span>
+                      {cfgVal === -1 && (
+                        <span className="text-[10px] text-slate-500">global: {globalLabel}</span>
+                      )}
+                    </div>
+                    <select
+                      className="w-full rounded border border-[#30363d] bg-[#21262d] px-2 py-1 text-xs text-slate-200 outline-none focus:border-pilot-blue"
+                      value={cfgVal}
+                      onChange={e => {
+                        const v = Number(e.target.value);
+                        setRepoConfig(r, { autoFetchInterval: v === -1 ? undefined : v });
+                        if (isActive) startAutoFetch(v === -1 ? globalFetchInterval : v);
+                      }}
+                    >
+                      {FETCH_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            );
+          })
         }
       </Section>
 
