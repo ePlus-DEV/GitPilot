@@ -20,13 +20,27 @@
 
 ---
 
-## How to release
+## Versioning — single source of truth
 
-Version lives in the **git tag** only. The release workflow automatically syncs it into `tauri.conf.json` at build time — do **not** edit `package.json` or `tauri.conf.json` version manually.
+**Only edit `package.json` → `"version"`.**
+
+`tauri.conf.json` has no `version` field — Tauri 2 reads it automatically from `package.json`.
+Never put `-alpha`/`-beta` in `package.json`. Channel info belongs in the **git tag** only.
+
+| What to change | Where |
+|---|---|
+| Bump version | `package.json` → `"version": "1.2.0"` |
+| Mark as alpha/beta | Git tag suffix: `v1.2.0-alpha.1` |
+| Never touch | `tauri.conf.json` version (field removed) |
+
+---
+
+## How to release
 
 ### Stable release
 
 ```bash
+# 1. Bump version in package.json → "1.2.0", commit & push
 git checkout main
 git pull
 
@@ -37,9 +51,13 @@ git push origin v1.2.0
 ### Alpha / Beta release
 
 ```bash
-git tag v1.2.0-alpha.1
-git push origin v1.2.0-alpha.1
+# package.json stays at base version e.g. "0.1.0"
+# Alpha/beta info goes in the tag only:
+git tag v0.1.0-alpha.1
+git push origin v0.1.0-alpha.1
 ```
+
+The release workflow strips the `-alpha.1` suffix before writing to `tauri.conf.json` so Windows MSI bundling works (MSI requires numeric-only pre-release identifiers).
 
 After the workflow completes, the `latest.json` updater manifest is automatically copied to the permanent `alpha-channel` release so in-app update checks for alpha users pick it up.
 
@@ -55,8 +73,9 @@ push tag v* → release.yml
   └── ubuntu-22.04
 
 Each runner:
-  1. Syncs tag version → src-tauri/tauri.conf.json
-  2. Builds Tauri app + signs installer
+  1. Strips pre-release suffix from tag (e.g. 1.0.0-alpha.1 → 1.0.0)
+  2. Writes stripped version → src-tauri/tauri.conf.json (overrides package.json at build time)
+  3. Builds Tauri app + signs installer
   3. Publishes GitHub Release with installers + latest.json
 
 Alpha only (ubuntu runner):
