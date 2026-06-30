@@ -18,9 +18,11 @@ const STROKE_W = 1.8;       // Slightly thicker than before for crisper lines
 const PAD_LEFT = 4;
 const OVERSCAN = 8;
 const MAX_LANES = 14;       // Support more parallel lanes before truncating
+const COMPACT_LANES = 6;    // Compact mode: show fewer lanes, narrower column
 const MAX_GRAPH_CHARS = MAX_LANES * 2;
 const GRAPH_W = MAX_LANES * LANE_W + PAD_LEFT * 2;
 const GRAPH_COL_W = GRAPH_W + 4;
+const COMPACT_GRAPH_COL_W = COMPACT_LANES * LANE_W + PAD_LEFT * 2 + 4;
 const BRANCH_COL_W = 148;
 const AUTHOR_W = 110;
 const DATE_W = 72;
@@ -79,12 +81,14 @@ function GraphLayer({
   laneLabels,
   activeLane,
   left,
+  graphColW,
 }: {
   rows: RowData[];
   startIndex: number;
   laneLabels: Map<number, string>;
   activeLane: number;
   left: number;
+  graphColW: number;
 }) {
   const [nodeGhost, setNodeGhost] = useState<{ x: number; y: number; color: string; label: string } | null>(null);
   const [hoveredLane, setHoveredLane] = useState<number | null>(null);
@@ -114,7 +118,7 @@ function GraphLayer({
     <>
       <svg
         className="pointer-events-none absolute"
-        style={{ left, top: startIndex * ROW_H, width: GRAPH_COL_W, height: svgH, zIndex: 2 }}
+        style={{ left, top: startIndex * ROW_H, width: graphColW, height: svgH, zIndex: 2, overflow: 'hidden' }}
         shapeRendering="geometricPrecision"
       >
         {rows.map((row, i) => {
@@ -279,11 +283,46 @@ function ExpandedBadge({ b }: { b: BadgeHover }) {
   );
 }
 
-function BranchCell({ row, selected, onBranchContextMenu, smartBranch, currentBranch, branchColW }: {
+type BadgeGroup = { name: string; displayName: string; local: boolean; remote: boolean };
+
+function buildBadgeGroups(refs: import('../../types/git').GraphRef[], currentBranch: string): {
+  groups: BadgeGroup[];
+  tagList: string[];
+} {
+  const groups: BadgeGroup[] = [];
+  const usedRemoteNames = new Set<string>();
+  for (const ref of refs) {
+    if (ref.refType !== 'local') continue;
+    const paired = refs.find(r => {
+      if (r.refType !== 'remote') return false;
+      if (ref.upstream) return r.name === ref.upstream;
+      const slash = r.name.indexOf('/');
+      return slash >= 0 && r.name.slice(slash + 1) === ref.name;
+    });
+    if (paired) usedRemoteNames.add(paired.name);
+    groups.push({ name: ref.name, displayName: ref.name, local: true, remote: !!paired });
+  }
+  for (const ref of refs) {
+    if (ref.refType !== 'remote') continue;
+    if (usedRemoteNames.has(ref.name)) continue;
+    if (ref.name.endsWith('/HEAD')) continue;
+    const slash = ref.name.indexOf('/');
+    const displayName = slash >= 0 ? ref.name.slice(slash + 1) : ref.name;
+    groups.push({ name: ref.name, displayName, local: false, remote: true });
+  }
+  // Current branch first
+  const idx = groups.findIndex(g => g.name === currentBranch);
+  if (idx > 0) {
+    const [cur] = groups.splice(idx, 1);
+    groups.unshift(cur);
+  }
+  return { groups, tagList: refs.filter(r => r.refType === 'tag').map(r => r.name) };
+}
+
+function BranchCell({ row, selected, onBranchContextMenu, currentBranch, branchColW }: {
   row: RowData;
   selected: boolean;
   onBranchContextMenu?: (e: ReactMouseEvent, name: string, local: boolean, remote: boolean) => void;
-  smartBranch: boolean;
   currentBranch: string;
   branchColW: number;
 }) {
@@ -299,52 +338,12 @@ function BranchCell({ row, selected, onBranchContextMenu, smartBranch, currentBr
 
   const isHead = graphRefs.some(r => r.refType === 'head');
 
-  // Group: each local ref is paired with its tracking remote (if that remote is on this same commit).
-  // Remote-only refs (no local counterpart here) get their own badge.
-  type BadgeGroup = { name: string; displayName: string; local: boolean; remote: boolean };
-  const groups: BadgeGroup[] = [];
-  const usedRemoteNames = new Set<string>();
+  const { groups, tagList } = buildBadgeGroups(graphRefs, currentBranch);
 
-  for (const ref of graphRefs) {
-    if (ref.refType !== 'local') continue;
-    // Find tracking remote on this same commit: use upstream annotation first, then heuristic
-    const paired = graphRefs.find(r => {
-      if (r.refType !== 'remote') return false;
-      if (ref.upstream) return r.name === ref.upstream;
-      // Heuristic: remote.name = "<remoteName>/<localName>"
-      const slash = r.name.indexOf('/');
-      return slash >= 0 && r.name.slice(slash + 1) === ref.name;
-    });
-    if (paired) usedRemoteNames.add(paired.name);
-    groups.push({ name: ref.name, displayName: ref.name, local: true, remote: !!paired });
-  }
-
-  // Remote refs without a local counterpart on this commit
-  for (const ref of graphRefs) {
-    if (ref.refType !== 'remote') continue;
-    if (usedRemoteNames.has(ref.name)) continue;
-    if (ref.name.endsWith('/HEAD')) continue; // skip origin/HEAD noise
-    // Strip remote prefix for display (e.g. "origin/feature/xxx" → "feature/xxx")
-    const slash = ref.name.indexOf('/');
-    const displayName = slash >= 0 ? ref.name.slice(slash + 1) : ref.name;
-    groups.push({ name: ref.name, displayName, local: false, remote: true });
-  }
-
-  const tagList = graphRefs.filter(r => r.refType === 'tag').map(r => r.name);
-
-  // Smart branch: prioritize current branch in the 2-badge slot
-  const orderedGroups = smartBranch
-    ? (() => {
-        const idx = groups.findIndex(g => g.name === currentBranch);
-        if (idx > 0) return [groups[idx], ...groups.slice(0, idx), ...groups.slice(idx + 1)];
-        return groups;
-      })()
-    : groups;
-
-  const showGroups = orderedGroups.slice(0, 2);
+  const showGroups = groups.slice(0, 2);
   const showTags = tagList.slice(0, Math.max(0, 2 - showGroups.length));
-  const extra = (orderedGroups.length - showGroups.length) + (tagList.length - showTags.length);
-  const allNames = [...orderedGroups.map(g => g.displayName), ...tagList].join(', ');
+  const extra = (groups.length - showGroups.length) + (tagList.length - showTags.length);
+  const allNames = [...groups.map((g: BadgeGroup) => g.displayName), ...tagList].join(', ');
   const totalBadges = showGroups.length + showTags.length;
   const badgeMaxW = totalBadges <= 1 ? 130 : 64;
 
@@ -481,7 +480,6 @@ const GraphRow = memo(function GraphRow({
         row={row}
         selected={selected}
         onBranchContextMenu={onBranchContextMenu}
-        smartBranch={smartBranch}
         currentBranch={currentBranch}
         branchColW={branchColW}
       />
@@ -489,9 +487,41 @@ const GraphRow = memo(function GraphRow({
       {/* Graph column — empty placeholder; graph rendered in shared GraphLayer above */}
       {graphColW > 0 && <div className="shrink-0" style={{ width: graphColW }} />}
 
-      {/* Message column */}
-      <div className="flex min-w-0 flex-1 items-center px-1.5">
-        <div className={`truncate text-xs ${selected ? 'font-medium text-white' : 'text-slate-200'}`}>
+      {/* Message column — inline branch badges when smartBranch enabled */}
+      <div className="flex min-w-0 flex-1 items-center gap-1 px-1.5">
+        {smartBranch && (() => {
+          const graphRefs = row.graph?.refs ?? [];
+          const hasRef = graphRefs.some(r => r.refType !== 'head');
+          if (!hasRef) return null;
+          const laneColor = row.graph ? LANE_COLORS[row.graph.colorIndex % LANE_COLORS.length] : LANE_COLORS[0];
+          const { groups, tagList } = buildBadgeGroups(graphRefs, currentBranch);
+          const inlineBadges = [
+            ...groups.map(g => ({ label: g.displayName.split('/').pop() ?? g.displayName, isTag: false })),
+            ...tagList.map(t => ({ label: t, isTag: true })),
+          ].slice(0, 3);
+          const overflow = (groups.length + tagList.length) - inlineBadges.length;
+          return (
+            <span className="flex shrink-0 items-center gap-0.5">
+              {inlineBadges.map(b => (
+                <span
+                  key={b.label}
+                  className="max-w-[80px] truncate rounded px-1 py-px text-[10px] font-medium leading-tight"
+                  style={{
+                    background: b.isTag ? '#7c3aed22' : `${laneColor}30`,
+                    color: b.isTag ? '#a78bfa' : laneColor,
+                    border: `1px solid ${b.isTag ? '#7c3aed55' : `${laneColor}60`}`,
+                  }}
+                >
+                  {b.label}
+                </span>
+              ))}
+              {overflow > 0 && (
+                <span className="text-[10px] text-slate-500">+{overflow}</span>
+              )}
+            </span>
+          );
+        })()}
+        <div className={`min-w-0 truncate text-xs ${selected ? 'font-medium text-white' : 'text-slate-200'}`}>
           {row.commit.message}
         </div>
       </div>
@@ -563,8 +593,8 @@ export function GitGraph() {
   const closeConfig = useCallback(() => setConfigOpen(false), []);
 
   const { columns: cols, compactGraph, smartBranch } = useLayoutStore();
-  const effectiveBranchW = cols.branch && !compactGraph ? BRANCH_COL_W : 0;
-  const effectiveGraphW = cols.graph ? GRAPH_COL_W : 0;
+  const effectiveBranchW = cols.branch ? BRANCH_COL_W : 0;
+  const effectiveGraphW = cols.graph ? (compactGraph ? COMPACT_GRAPH_COL_W : GRAPH_COL_W) : 0;
   const effectiveChangesW = cols.changes ? CHANGES_W : 0;
   const effectiveAuthorW = cols.author ? AUTHOR_W : 0;
   const effectiveDateW = cols.date ? DATE_W : 0;
@@ -1040,7 +1070,7 @@ export function GitGraph() {
         {/* Virtual scrolled commit rows */}
         <div className="relative" style={{ height: totalListHeight }}>
           {/* Shared graph SVG layer — renders all lane lines/nodes without per-row clipping */}
-          {effectiveGraphW > 0 && <GraphLayer rows={renderedRows} startIndex={startIndex} laneLabels={laneLabels} activeLane={activeLane} left={effectiveBranchW} />}
+          {effectiveGraphW > 0 && <GraphLayer rows={renderedRows} startIndex={startIndex} laneLabels={laneLabels} activeLane={activeLane} left={effectiveBranchW} graphColW={effectiveGraphW} />}
 
           {renderedRows.map((row, i) => {
             const index = startIndex + i;
