@@ -102,7 +102,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          gh release download ${{ github.ref_name }} --pattern latest.json --output /tmp/latest.json
+          for attempt in {1..30}; do
+            if gh release download ${{ github.ref_name }} --pattern latest.json --output /tmp/latest.json; then
+              break
+            fi
+
+            if [[ "$attempt" -eq 30 ]]; then
+              echo "latest.json was not found on release ${{ github.ref_name }} after waiting." >&2
+              echo "Available assets:" >&2
+              gh release view ${{ github.ref_name }} --json assets --jq '.assets[].name' >&2 || true
+              exit 1
+            fi
+
+            echo "latest.json is not available yet; retrying in 10 seconds ($attempt/30)."
+            sleep 10
+          done
 
           if gh release view beta-channel &>/dev/null; then
             gh release upload beta-channel /tmp/latest.json --clobber
