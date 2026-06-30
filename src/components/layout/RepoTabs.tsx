@@ -28,11 +28,12 @@ export function RepoTabs() {
     <div className="flex h-[48px] shrink-0 items-stretch gap-0 border-b border-pilot-line bg-[#080d14] pr-1">
       {tabs.map(path => {
         const name = path.split(/[\\/]/).pop() ?? path;
-        const isActive = repo?.path === path;
+        const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+        const isActive = !newTabOpen && !!repo && norm(repo.path) === norm(path);
         return (
           <div
             key={path}
-            onClick={() => void openRepo(path)}
+            onClick={() => { useGitStore.setState({ newTabOpen: false }); void openRepo(path); }}
             title={path}
             className={`group relative flex cursor-pointer items-center gap-1.5 border-r border-[#30363d] px-3 text-[11px] select-none transition-colors ${
               isActive
