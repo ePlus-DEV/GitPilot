@@ -20,6 +20,7 @@ import { SettingsPanel } from './components/settings/SettingsPanel';
 import { WelcomeScreen } from './components/welcome/WelcomeScreen';
 import { RepoTabs } from './components/layout/RepoTabs';
 import { RepoManagementPanel } from './components/layout/RepoManagementPanel';
+import { NewTabPanel } from './components/layout/NewTabPanel';
 import { GitPilotIcon } from './components/common/GitPilotIcon';
 import { UpdateDialog } from './components/update/UpdateDialog';
 import { gitService } from './services/gitService';
@@ -34,6 +35,7 @@ export function App() {
   const aiText = useGitStore(s => s.aiText);
   const settingsOpen = useGitStore(s => s.settingsOpen);
   const repoMgmtOpen = useGitStore(s => s.repoMgmtOpen);
+  const newTabOpen = useGitStore(s => s.newTabOpen);
   const [appVersion, setAppVersion] = useState('');
   const [updateOpen, setUpdateOpen] = useState(false);
   const [updateTestMode, setUpdateTestMode] = useState(false);
@@ -184,9 +186,10 @@ export function App() {
       )}
       <RepoTabs />
       <TopBar />
-      {!repo && <WelcomeScreen />}
+      {newTabOpen && <NewTabPanel />}
+      {!repo && !newTabOpen && <WelcomeScreen />}
 
-      {repo && <div className="flex min-h-0 flex-1 overflow-hidden">
+      {repo && !newTabOpen && <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="min-h-0 shrink-0" style={{ width: sidebarWidth }}>
           <Sidebar />
         </div>
@@ -245,7 +248,7 @@ export function App() {
         </aside>
       </div>}
 
-      {repo && <ConsolePanel
+      {repo && !newTabOpen && <ConsolePanel
         height={consoleHeight}
         onResizeStart={startResize(event => setConsoleHeight(Math.min(360, Math.max(80, window.innerHeight - event.clientY))))}
       />}

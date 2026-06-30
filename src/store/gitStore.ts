@@ -67,6 +67,7 @@ type State = {
   settingsOpen: boolean;
   settingsTab: string;
   repoMgmtOpen: boolean;
+  newTabOpen: boolean;
   rightPanelTab: 'working' | 'review';
   console: string[];
   problems: string[];
@@ -110,6 +111,7 @@ export const useGitStore = create<State>((set, get) => ({
   settingsOpen: false,
   settingsTab: 'general',
   repoMgmtOpen: false,
+  newTabOpen: false,
   rightPanelTab: 'working',
   console: [],
   problems: [],
@@ -123,7 +125,6 @@ export const useGitStore = create<State>((set, get) => ({
   openRepo: async path => {
     set({
       busy: true,
-      repo: undefined,
       status: empty,
       branches: [],
       remotes: [],

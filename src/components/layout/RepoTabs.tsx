@@ -1,48 +1,91 @@
-import { Plus } from 'lucide-react';
-import { open } from '@tauri-apps/plugin-dialog';
+import { GitBranch, Plus, X } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
+import { gitService } from '../../services/gitService';
 
 export function RepoTabs() {
   const repo = useGitStore(s => s.repo);
   const recent = useGitStore(s => s.recent);
   const openRepo = useGitStore(s => s.openRepo);
+  const newTabOpen = useGitStore(s => s.newTabOpen);
 
-  const pick = async () => {
-    const p = await open({ directory: true, multiple: false });
-    if (p && !Array.isArray(p)) void openRepo(p);
+  const pick = () => useGitStore.setState({ newTabOpen: true });
+
+  const closeTab = async (e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    await gitService.removeRecentRepository(path);
+    const next = recent.filter(r => r !== path);
+    useGitStore.setState({ recent: next });
+    if (repo?.path === path) {
+      if (next.length > 0) void openRepo(next[0]);
+      else useGitStore.setState({ repo: undefined });
+    }
   };
 
-  const tabs = recent.slice(0, 10);
+  const tabs = recent.slice(0, 12);
   if (tabs.length === 0) return null;
 
   return (
-    <div className="flex h-[30px] shrink-0 items-end gap-0 border-b border-pilot-line bg-[#080d14] pl-1 pr-2">
+    <div className="flex h-[48px] shrink-0 items-stretch gap-0 border-b border-pilot-line bg-[#080d14] pr-1">
       {tabs.map(path => {
         const name = path.split(/[\\/]/).pop() ?? path;
         const isActive = repo?.path === path;
         return (
-          <button
+          <div
             key={path}
             onClick={() => void openRepo(path)}
             title={path}
-            className={`relative flex h-[26px] items-center gap-1.5 rounded-t-md px-3 text-[11px] font-medium transition-colors select-none ${
+            className={`group relative flex cursor-pointer items-center gap-1.5 border-r border-[#30363d] px-3 text-[11px] select-none transition-colors ${
               isActive
-                ? 'bg-[#161b22] text-slate-200 border border-b-0 border-pilot-line'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[#1c2128] font-semibold text-white'
+                : 'bg-[#080d14] font-normal text-slate-500 hover:bg-[#0d1117] hover:text-slate-300'
             }`}
           >
+            {/* active indicator top bar */}
             {isActive && (
-              <span className="absolute bottom-0 left-0 right-0 h-px bg-[#161b22]" />
+              <span className="absolute inset-x-0 top-0 h-[2px] bg-pilot-blue" />
             )}
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? 'bg-pilot-blue' : 'bg-slate-500'}`} />
-            {name}
-          </button>
+
+            <GitBranch
+              size={11}
+              className={`shrink-0 ${isActive ? 'text-pilot-blue' : 'text-slate-600 group-hover:text-slate-400'}`}
+            />
+            <span className="max-w-[120px] truncate">{name}</span>
+
+            {/* close button */}
+            <button
+              onClick={e => void closeTab(e, path)}
+              className={`-mr-1 ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors ${
+                isActive
+                  ? 'text-slate-400 hover:bg-[#30363d] hover:text-slate-100'
+                  : 'text-transparent group-hover:text-slate-500 hover:!text-slate-200 hover:bg-[#21262d]'
+              }`}
+            >
+              <X size={10} strokeWidth={2.5} />
+            </button>
+          </div>
         );
       })}
+
+      {/* New Tab tab */}
+      {newTabOpen && (
+        <div className="group relative flex items-center gap-1.5 border-r border-[#30363d] bg-[#1c2128] px-3 text-[11px] font-semibold text-white select-none">
+          <span className="absolute inset-x-0 top-0 h-[2px] bg-pilot-blue" />
+          <Plus size={11} className="text-pilot-blue shrink-0" />
+          <span>New Tab</span>
+          <button
+            onClick={() => useGitStore.setState({ newTabOpen: false })}
+            className="ml-0.5 -mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-[#30363d] hover:text-slate-100 transition-colors"
+          >
+            <X size={10} strokeWidth={2.5} />
+          </button>
+        </div>
+      )}
+
+      {/* New tab button */}
       <button
-        onClick={() => void pick()}
-        title="Open repository"
-        className="ml-1 flex h-[22px] w-[22px] shrink-0 items-center justify-center self-center rounded text-slate-500 transition-colors hover:bg-[#161b22] hover:text-slate-300"
+        onClick={pick}
+        title="New tab"
+        className="flex w-9 shrink-0 items-center justify-center text-slate-600 transition-colors hover:bg-[#0d1117] hover:text-slate-300"
       >
         <Plus size={13} />
       </button>
