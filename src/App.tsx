@@ -209,7 +209,12 @@ export function App() {
         </div>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-pilot-line bg-pilot-bg">
-          {showMergePanel ? <MergeConflictPanel /> : diff ? <DiffViewer /> : <GitGraph />}
+          {showMergePanel ? <MergeConflictPanel /> : (
+            <>
+              <div className={`min-h-0 flex-1 flex-col ${diff ? 'hidden' : 'flex'}`}><GitGraph /></div>
+              {diff && <DiffViewer />}
+            </>
+          )}
         </main>
 
         <div
