@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Default permissions for GitPilot","local":true,"windows":["main"],"permissions":["core:default","dialog:default"]}}
+{"default":{"identifier":"default","description":"Default permissions for GitPilot","local":true,"windows":["main"],"permissions":["core:default","dialog:default","updater:default","process:default","process:allow-restart","process:allow-exit"]}}

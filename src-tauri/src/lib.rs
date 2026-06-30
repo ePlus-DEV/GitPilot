@@ -22,7 +22,8 @@ pub fn run() {
             let term    = MenuItem::with_id(h, "open_terminal",   "Open External Terminal",  true, Some("Alt+T"))?;
             let fmgr    = MenuItem::with_id(h, "open_file_manager","Open in File Manager",   true, Some("Alt+O"))?;
             let prefs   = MenuItem::with_id(h, "preferences",     "Preferences...",          true, Some("CmdOrCtrl+Comma"))?;
-            let quit    = PredefinedMenuItem::quit(h, Some("Exit"))?;
+            let quit      = PredefinedMenuItem::quit(h, Some("Exit"))?;
+            let relaunch  = MenuItem::with_id(h, "relaunch", "Relaunch", true, Some("CmdOrCtrl+Shift+R"))?;
 
             let file = SubmenuBuilder::new(h, "File")
                 .item(&clone)
@@ -35,6 +36,7 @@ pub fn run() {
                 .separator()
                 .item(&prefs)
                 .separator()
+                .item(&relaunch)
                 .item(&quit)
                 .build()?;
 

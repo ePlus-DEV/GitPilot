@@ -6,22 +6,28 @@ import { GitPilotIcon } from '../common/GitPilotIcon';
 
 type Status = 'checking' | 'available' | 'latest' | 'downloading' | 'installing' | 'error';
 
-export function UpdateDialog({ onClose }: { onClose: () => void }) {
-  const [status, setStatus] = useState<Status>('checking');
-  const [update, setUpdate] = useState<Update | null>(null);
+const MOCK_UPDATE = {
+  version: '9.9.9',
+  body: '- New feature: something awesome\n- Fix: critical bug\n- Improvement: performance boost',
+} as unknown as Update;
+
+export function UpdateDialog({ onClose, testMode }: { onClose: () => void; testMode?: boolean }) {
+  const [status, setStatus] = useState<Status>(testMode ? 'available' : 'checking');
+  const [update, setUpdate] = useState<Update | null>(testMode ? MOCK_UPDATE : null);
   const [progress, setProgress] = useState(0);
   const [downloaded, setDownloaded] = useState(0);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (testMode) return;
     check()
       .then(u => {
         if (u) { setUpdate(u); setStatus('available'); }
         else setStatus('latest');
       })
       .catch(e => { setError(String(e)); setStatus('error'); });
-  }, []);
+  }, [testMode]);
 
   const handleInstall = async () => {
     if (!update) return;

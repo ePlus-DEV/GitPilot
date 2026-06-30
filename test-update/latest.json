@@ -1,0 +1,19 @@
+{
+  "version": "9.9.9",
+  "notes": "Test release notes.\n- Feature A\n- Bug fix B",
+  "pub_date": "2026-06-30T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "fake-signature-for-ui-test-only",
+      "url": "https://example.com/fake.zip"
+    },
+    "darwin-aarch64": {
+      "signature": "fake-signature-for-ui-test-only",
+      "url": "https://example.com/fake.zip"
+    },
+    "linux-x86_64": {
+      "signature": "fake-signature-for-ui-test-only",
+      "url": "https://example.com/fake.zip"
+    }
+  }
+}

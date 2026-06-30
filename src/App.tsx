@@ -36,6 +36,7 @@ export function App() {
   const repoMgmtOpen = useGitStore(s => s.repoMgmtOpen);
   const [appVersion, setAppVersion] = useState('');
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [updateTestMode, setUpdateTestMode] = useState(false);
   const rightPanelTab = useGitStore(s => s.rightPanelTab);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [rightWidth, setRightWidth] = useState(430);
@@ -60,6 +61,7 @@ export function App() {
       const mod = e.metaKey || e.ctrlKey;
       const state = useGitStore.getState();
       if (mod && e.key.toLowerCase() === 'r') { e.preventDefault(); void state.refresh(); }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'u') { e.preventDefault(); setUpdateTestMode(true); setUpdateOpen(true); }
       if (mod && e.key === 'Enter') document.dispatchEvent(new CustomEvent('gitpilot-commit'));
       if (mod && e.shiftKey && e.key.toLowerCase() === 'p' && state.repo)
         void state.run('push', () => gitService.push(state.repo!.path));
@@ -139,6 +141,10 @@ export function App() {
       void useGitStore.getState().refresh();
     });
 
+    on('menu://relaunch', () => {
+      import('@tauri-apps/plugin-process').then(({ relaunch }) => void relaunch());
+    });
+
     return () => {
       cancelled = true;
       window.removeEventListener('keydown', onKey);
@@ -164,7 +170,7 @@ export function App() {
     <div className="flex h-full min-w-[980px] flex-col overflow-hidden bg-pilot-bg text-slate-100">
       {settingsOpen && <SettingsPanel />}
       {repoMgmtOpen && <RepoManagementPanel />}
-      {updateOpen && <UpdateDialog onClose={() => setUpdateOpen(false)} />}
+      {updateOpen && <UpdateDialog onClose={() => { setUpdateOpen(false); setUpdateTestMode(false); }} testMode={updateTestMode} />}
       {appVersion && (
         <button
           className="fixed bottom-2 right-3 z-40 flex items-center gap-1.5 rounded border border-[#30363d] bg-[#161b22] px-2 py-0.5 text-[10px] font-mono text-slate-500 transition-colors hover:border-pilot-blue/40 hover:text-slate-300"
