@@ -143,7 +143,7 @@ export function Sidebar() {
       <div className="flex-1 overflow-auto py-2">
         <Section icon={<FolderGit2 size={13} />} title="Repositories">
           {recent.length === 0
-            ? <div className="px-3 py-1 text-[11px] text-slate-600">No recent repos</div>
+            ? <div className="px-3 py-1 text-[11px] text-slate-500">No recent repos</div>
             : recent.map(r => (
               <SidebarRow
                 key={r}
@@ -211,7 +211,7 @@ export function Sidebar() {
         <Section icon={<Globe size={13} />} title="Remotes" count={remotes.length}>
           {remotes.map(r => (
             <div key={r.name}>
-              <div className="px-3 py-1 text-[11px] font-semibold text-slate-400">{r.name}</div>
+              <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">{r.name}</div>
               {branches.filter(b => b.remote && branchRef(b).startsWith(r.name + '/')).map(b => (
                 <SidebarRow
                   key={b.name}
@@ -225,7 +225,7 @@ export function Sidebar() {
               ))}
             </div>
           ))}
-          {remotes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No remotes</div>}
+          {remotes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-500">No remotes</div>}
         </Section>
 
         <Section icon={<Tag size={13} />} title="Tags" count={tags.length}>
@@ -236,7 +236,7 @@ export function Sidebar() {
               onDelete={() => repo && void run('delete tag', () => gitService.deleteTag(repo, t.name))}
             />
           ))}
-          {tags.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No tags</div>}
+          {tags.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-500">No tags</div>}
         </Section>
 
         <Section icon={<Archive size={13} />} title="Stashes" count={stashes.length}>
@@ -259,7 +259,7 @@ export function Sidebar() {
               onDelete={() => repo && void run('drop stash', () => gitService.dropStash(repo, st.name))}
             />
           ))}
-          {stashes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-600">No stashes</div>}
+          {stashes.length === 0 && <div className="px-3 py-1 text-[11px] text-slate-500">No stashes</div>}
         </Section>
       </div>
 
@@ -269,8 +269,8 @@ export function Sidebar() {
             <GitMerge size={12} />
             {mergeState.isMerging ? 'Merge in progress' : 'Rebase in progress'}
           </div>
-          <div className="mt-0.5 text-[10px] text-slate-400">
-            {mergeState.conflictedFiles.length} conflict(s)
+          <div className="mt-0.5 text-[11px] text-amber-300/70">
+            {mergeState.conflictedFiles.length} conflict{mergeState.conflictedFiles.length !== 1 ? 's' : ''}
           </div>
         </div>
       )}
@@ -303,14 +303,14 @@ function Section({
     <section className="mb-1">
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 transition-colors hover:text-slate-300"
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 transition-colors hover:text-slate-200"
       >
-        {icon}
+        <span className="text-slate-500">{icon}</span>
         <span className="flex-1 text-left">{title}</span>
         {!open && count !== undefined && (
-          <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[9px] font-bold text-slate-400">{count}</span>
+          <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[9px] font-bold text-slate-300">{count}</span>
         )}
-        <span className="ml-1 text-slate-600">{open ? '▾' : '▸'}</span>
+        <span className="ml-1 text-slate-500">{open ? '▾' : '▸'}</span>
       </button>
       {open && <div className="space-y-0.5 pb-1">{children}</div>}
     </section>
@@ -335,18 +335,18 @@ function SidebarRow({
 }) {
   return (
     <div
-      className={`group flex cursor-default items-center gap-1.5 rounded-none px-3 py-1 hover:bg-[#21262d]/60 ${active ? 'bg-[#21262d]/80' : ''}`}
+      className={`group flex cursor-default items-center gap-1.5 px-3 py-[3px] transition-colors hover:bg-[#21262d] ${active ? 'bg-[#21262d]' : ''}`}
       onContextMenu={onContextMenu}
     >
       {icon}
       <button
-        className={`min-w-0 flex-1 truncate text-left text-[12px] ${active ? 'font-semibold text-pilot-blue' : 'text-slate-300'}`}
+        className={`min-w-0 flex-1 truncate text-left text-[12px] ${active ? 'font-semibold text-pilot-blue' : 'text-slate-300 hover:text-slate-100'}`}
         title={title ?? label}
         onClick={onClick}
       >
         {label}
       </button>
-      {meta && <span className="shrink-0 text-[10px] text-slate-500">{meta}</span>}
+      {meta && <span className="shrink-0 text-[10px] text-slate-400">{meta}</span>}
       {extra}
       <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
         {onAction && (

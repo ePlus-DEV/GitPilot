@@ -42,7 +42,7 @@ function RecentItem({ path, onClick }: { path: string; onClick: () => void }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-slate-200 group-hover:text-white">{name}</span>
-        <span className="block truncate text-[11px] text-slate-600">{dir || path}</span>
+        <span className="block truncate text-[11px] text-slate-500">{dir || path}</span>
       </span>
       <ChevronRight size={14} className="shrink-0 text-slate-700 transition-colors group-hover:text-slate-400" />
     </button>

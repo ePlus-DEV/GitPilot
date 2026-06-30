@@ -31,10 +31,10 @@ export function TopBar() {
   };
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-pilot-line bg-[#161b22] px-3">
+    <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-pilot-line bg-[#161b22] px-3">
       {/* Logo */}
-      <div className="flex shrink-0 items-center gap-2 border-r border-pilot-line pr-3">
-        <GitPilotIcon size={26} />
+      <div className="flex shrink-0 items-center gap-2 border-r border-pilot-line pr-3 mr-1">
+        <GitPilotIcon size={24} />
         <span className="text-sm leading-none tracking-wide">
           <span className="font-light text-slate-500">git</span>
           <span className="font-bold text-slate-100">PILOT</span>
@@ -52,32 +52,32 @@ export function TopBar() {
 
       {/* Actions */}
       {repo && (
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5">
           <button className="icon-btn" title="Fetch" onClick={() => run('fetch', () => gitService.fetch(repo.path))} disabled={busy}>
-            <Download size={14} />
+            <Download size={13} />
             <span>Fetch</span>
           </button>
           <button className="icon-btn" title="Pull" onClick={() => run('pull', () => gitService.pull(repo.path))} disabled={busy}>
-            <ArrowDownToLine size={14} />
+            <ArrowDownToLine size={13} />
             <span>Pull</span>
           </button>
           <button className="icon-btn accent" title="Push" onClick={() => run('push', () => gitService.push(repo.path))} disabled={busy}>
-            <Upload size={14} />
+            <Upload size={13} />
             <span>Push</span>
           </button>
           <button className="icon-btn" title="Create and checkout a new branch" onClick={createBranch} disabled={busy}>
-            <GitBranch size={14} />
+            <GitBranch size={13} />
             <span>Branch</span>
           </button>
           <button className="icon-btn" title="Merge branch into current branch" onClick={mergeBranch} disabled={busy}>
-            <GitMerge size={14} />
+            <GitMerge size={13} />
             <span>Merge</span>
           </button>
 
-          <div className="mx-1 h-5 w-px bg-pilot-line" />
+          <div className="mx-1 h-5 w-px bg-[#30363d]" />
 
           <button className="icon-btn h-8 w-8 justify-center p-0" title="Refresh (Ctrl+R)" onClick={() => void useGitStore.getState().refresh()} disabled={busy}>
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            {busy ? <Loader2 size={14} className="animate-spin text-pilot-blue" /> : <RefreshCw size={14} />}
           </button>
         </div>
       )}

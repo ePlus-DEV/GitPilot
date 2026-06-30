@@ -2,16 +2,54 @@ import { GitBranch, Plus, X } from 'lucide-react';
 import { useGitStore } from '../../store/gitStore';
 import { gitService } from '../../services/gitService';
 
+const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+
+function Tab({
+  label,
+  icon,
+  isActive,
+  onClick,
+  onClose,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+  onClick: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`group relative flex h-full cursor-pointer items-center gap-2 border-r border-[#21262d] pl-3.5 pr-2 text-xs select-none transition-colors ${
+        isActive
+          ? 'bg-[#161b22] text-slate-100'
+          : 'bg-transparent text-slate-400 hover:bg-[#0d1117] hover:text-slate-200'
+      }`}
+    >
+      {isActive && <span className="absolute inset-x-0 top-0 h-[2px] bg-pilot-blue" />}
+      {icon}
+      <span className="max-w-[120px] truncate font-medium">{label}</span>
+      <button
+        onClick={e => { e.stopPropagation(); onClose(); }}
+        className={`ml-1 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded transition-colors ${
+          isActive
+            ? 'text-slate-500 hover:bg-[#30363d] hover:text-slate-100'
+            : 'text-transparent group-hover:text-slate-500 hover:!bg-[#21262d] hover:!text-slate-200'
+        }`}
+      >
+        <X size={10} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
 export function RepoTabs() {
   const repo = useGitStore(s => s.repo);
   const recent = useGitStore(s => s.recent);
   const openRepo = useGitStore(s => s.openRepo);
   const newTabOpen = useGitStore(s => s.newTabOpen);
 
-  const pick = () => useGitStore.setState({ newTabOpen: true });
-
-  const closeTab = async (e: React.MouseEvent, path: string) => {
-    e.stopPropagation();
+  const closeTab = async (path: string) => {
     await gitService.removeRecentRepository(path);
     const next = recent.filter(r => r !== path);
     useGitStore.setState({ recent: next });
@@ -25,70 +63,43 @@ export function RepoTabs() {
   if (tabs.length === 0) return null;
 
   return (
-    <div className="flex h-[48px] shrink-0 items-stretch gap-0 border-b border-pilot-line bg-[#080d14] pr-1">
+    <div className="flex h-[42px] shrink-0 items-stretch border-b border-pilot-line bg-[#0d1117]">
       {tabs.map(path => {
         const name = path.split(/[\\/]/).pop() ?? path;
-        const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
         const isActive = !newTabOpen && !!repo && norm(repo.path) === norm(path);
         return (
-          <div
+          <Tab
             key={path}
+            label={name}
+            icon={
+              <GitBranch
+                size={12}
+                className={`shrink-0 ${isActive ? 'text-pilot-blue' : 'text-slate-500 group-hover:text-slate-300'}`}
+              />
+            }
+            isActive={isActive}
             onClick={() => { useGitStore.setState({ newTabOpen: false }); void openRepo(path); }}
-            title={path}
-            className={`group relative flex cursor-pointer items-center gap-1.5 border-r border-[#30363d] px-3 text-[11px] select-none transition-colors ${
-              isActive
-                ? 'bg-[#1c2128] font-semibold text-white'
-                : 'bg-[#080d14] font-normal text-slate-500 hover:bg-[#0d1117] hover:text-slate-300'
-            }`}
-          >
-            {/* active indicator top bar */}
-            {isActive && (
-              <span className="absolute inset-x-0 top-0 h-[2px] bg-pilot-blue" />
-            )}
-
-            <GitBranch
-              size={11}
-              className={`shrink-0 ${isActive ? 'text-pilot-blue' : 'text-slate-600 group-hover:text-slate-400'}`}
-            />
-            <span className="max-w-[120px] truncate">{name}</span>
-
-            {/* close button */}
-            <button
-              onClick={e => void closeTab(e, path)}
-              className={`-mr-1 ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors ${
-                isActive
-                  ? 'text-slate-400 hover:bg-[#30363d] hover:text-slate-100'
-                  : 'text-transparent group-hover:text-slate-500 hover:!text-slate-200 hover:bg-[#21262d]'
-              }`}
-            >
-              <X size={10} strokeWidth={2.5} />
-            </button>
-          </div>
+            onClose={() => void closeTab(path)}
+          />
         );
       })}
 
-      {/* New Tab tab */}
       {newTabOpen && (
-        <div className="group relative flex items-center gap-1.5 border-r border-[#30363d] bg-[#1c2128] px-3 text-[11px] font-semibold text-white select-none">
-          <span className="absolute inset-x-0 top-0 h-[2px] bg-pilot-blue" />
-          <Plus size={11} className="text-pilot-blue shrink-0" />
-          <span>New Tab</span>
-          <button
-            onClick={() => useGitStore.setState({ newTabOpen: false })}
-            className="ml-0.5 -mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-[#30363d] hover:text-slate-100 transition-colors"
-          >
-            <X size={10} strokeWidth={2.5} />
-          </button>
-        </div>
+        <Tab
+          label="New Tab"
+          icon={<Plus size={12} className="shrink-0 text-pilot-blue" />}
+          isActive
+          onClick={() => {}}
+          onClose={() => useGitStore.setState({ newTabOpen: false })}
+        />
       )}
 
-      {/* New tab button */}
       <button
-        onClick={pick}
+        onClick={() => useGitStore.setState({ newTabOpen: true })}
         title="New tab"
-        className="flex w-9 shrink-0 items-center justify-center text-slate-600 transition-colors hover:bg-[#0d1117] hover:text-slate-300"
+        className="flex w-9 shrink-0 items-center justify-center text-slate-500 transition-colors hover:bg-[#161b22] hover:text-slate-300"
       >
-        <Plus size={13} />
+        <Plus size={14} />
       </button>
     </div>
   );

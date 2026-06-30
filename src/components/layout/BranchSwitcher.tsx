@@ -53,14 +53,14 @@ export function BranchSwitcher() {
         <span className="max-w-[180px] truncate font-medium">{branch}</span>
         {behind > 0 && <span className="text-[10px] text-amber-400">↓{behind}</span>}
         {ahead > 0 && <span className="text-[10px] text-emerald-400">↑{ahead}</span>}
-        <ChevronDown size={11} className={`shrink-0 text-slate-600 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={11} className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 w-[300px] overflow-hidden rounded-lg border border-[#30363d] bg-[#161b22] shadow-2xl shadow-black/60">
           <div className="border-b border-[#21262d] p-2">
             <div className="relative">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600" />
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 autoFocus
                 value={search}
@@ -74,7 +74,7 @@ export function BranchSwitcher() {
           <div className="max-h-[380px] overflow-auto p-1">
             {local.length > 0 && (
               <>
-                <div className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+                <div className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                   <Monitor size={10} />
                   Local
                 </div>
@@ -83,7 +83,7 @@ export function BranchSwitcher() {
             )}
             {remote.length > 0 && (
               <>
-                <div className="mt-1 flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+                <div className="mt-1 flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                   <Cloud size={10} />
                   Remote
                 </div>
@@ -91,7 +91,7 @@ export function BranchSwitcher() {
               </>
             )}
             {filtered.length === 0 && (
-              <div className="py-6 text-center text-xs text-slate-700">No branches found</div>
+              <div className="py-6 text-center text-xs text-slate-500">No branches found</div>
             )}
           </div>
         </div>
@@ -111,10 +111,10 @@ function BranchRow({ branch, onSelect }: { branch: BranchInfo; onSelect: () => v
           : 'text-slate-400 hover:bg-[#21262d] hover:text-slate-200'
       }`}
     >
-      <GitBranch size={11} className={branch.current ? 'text-pilot-blue shrink-0' : 'text-slate-600 shrink-0'} />
+      <GitBranch size={11} className={branch.current ? 'text-pilot-blue shrink-0' : 'text-slate-500 shrink-0'} />
       <span className="min-w-0 flex-1 truncate">{branch.name}</span>
-      {branch.ahead > 0 && <span className="text-[9px] text-emerald-500">↑{branch.ahead}</span>}
-      {branch.behind > 0 && <span className="text-[9px] text-amber-500">↓{branch.behind}</span>}
+      {branch.ahead > 0 && <span className="text-[10px] text-emerald-400">↑{branch.ahead}</span>}
+      {branch.behind > 0 && <span className="text-[10px] text-amber-400">↓{branch.behind}</span>}
       {branch.current && <Check size={11} className="shrink-0 text-pilot-blue" />}
     </button>
   );

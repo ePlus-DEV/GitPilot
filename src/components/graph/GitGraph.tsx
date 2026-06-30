@@ -522,7 +522,7 @@ const GraphRow = memo(function GraphRow({
       {/* Date column */}
       {dateW > 0 && (
         <div
-          className={`shrink-0 px-2 text-[10px] ${selected ? 'text-slate-200' : 'text-slate-500'}`}
+          className={`shrink-0 px-2 text-[11px] ${selected ? 'text-slate-200' : 'text-slate-400'}`}
           style={{ width: dateW }}
         >
           {relativeDate(row.commit.date)}
@@ -878,7 +878,7 @@ export function GitGraph() {
           {/* HISTORY label + count */}
           <div className="flex shrink-0 items-center gap-2 border-r border-pilot-line px-3 py-2">
             <GitCommitHorizontal size={13} className="text-slate-500" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">History</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">History</span>
             <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[9px] font-bold text-slate-300">
               {visibleRows.length}
             </span>
@@ -925,7 +925,7 @@ export function GitGraph() {
 
             {/* Fetch button */}
             <button
-              className={`icon-btn h-7 gap-1 text-[10px] ${fetching ? 'opacity-60' : ''}`}
+              className={`icon-btn h-7 gap-1 ${fetching ? 'opacity-60' : ''}`}
               onClick={() => void handleFetch()}
               disabled={fetching || !repo}
               title="Fetch all remotes"
@@ -936,7 +936,7 @@ export function GitGraph() {
 
             {/* Dim merges toggle */}
             <button
-              className={`icon-btn h-7 gap-1 text-[10px] ${dimMerges ? 'accent' : ''}`}
+              className={`icon-btn h-7 gap-1 ${dimMerges ? 'accent' : ''}`}
               onClick={() => setDimMerges(v => !v)}
               title={dimMerges ? 'Show merge commits' : 'Dim merge commits'}
             >
@@ -955,7 +955,7 @@ export function GitGraph() {
       </div>
 
       {/* Column headers */}
-      <div className="relative flex shrink-0 select-none border-b border-pilot-line bg-pilot-bg text-[9px] font-bold uppercase tracking-wider text-slate-600">
+      <div className="relative flex shrink-0 select-none border-b border-pilot-line bg-pilot-bg text-[10px] font-bold uppercase tracking-wider text-slate-500">
         {effectiveBranchW > 0 && <div className="shrink-0 px-2 py-1.5" style={{ width: effectiveBranchW }}>Branch</div>}
         {effectiveGraphW > 0 && <div className="shrink-0" style={{ width: effectiveGraphW }} />}
         <div className="min-w-0 flex-1 px-2 py-1.5">Commit</div>

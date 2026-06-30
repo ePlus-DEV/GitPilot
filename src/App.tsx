@@ -210,13 +210,13 @@ export function App() {
           {/* Tab bar */}
           <div className="flex shrink-0 border-b border-pilot-line bg-[#161b22]">
             <button
-              className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${rightPanelTab === 'working' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`px-4 py-2.5 text-xs font-semibold tracking-wide transition-colors ${rightPanelTab === 'working' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-400 hover:text-slate-200'}`}
               onClick={() => useGitStore.setState({ rightPanelTab: 'working' })}
             >
               Working Directory
             </button>
             <button
-              className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${rightPanelTab === 'review' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`px-4 py-2.5 text-xs font-semibold tracking-wide transition-colors ${rightPanelTab === 'review' ? 'border-b-2 border-pilot-blue text-pilot-blue' : 'text-slate-400 hover:text-slate-200'}`}
               onClick={() => useGitStore.setState({ rightPanelTab: 'review' })}
             >
               Code Review
@@ -238,7 +238,7 @@ export function App() {
               )}
               {conflict ? <MergeResolver /> : diff ? <DiffViewer /> : null}
               {!selectedCommit && !conflict && !diff && (
-                <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-slate-500">
+                <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs text-slate-500">
                   Select a commit to inspect it.
                 </div>
               )}

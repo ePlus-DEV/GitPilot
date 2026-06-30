@@ -10,94 +10,41 @@ html, body, #root { height: 100%; overflow: hidden; }
 }
 
 body {
-  @apply bg-pilot-bg text-slate-100 font-sans;
+  @apply bg-pilot-bg text-slate-200 font-sans;
   font-size: 13px;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Standard button */
 .btn {
-  @apply rounded border border-pilot-line bg-[#21262d] px-2 py-1 text-xs text-slate-300
-         hover:bg-[#30363d] disabled:opacity-40 transition-colors;
+  @apply rounded border border-[#30363d] bg-[#21262d] px-3 py-1.5 text-xs font-medium text-slate-200
+         hover:bg-[#30363d] hover:text-slate-100 disabled:opacity-40 transition-colors;
 }
 
 .btn-primary {
-  @apply rounded bg-pilot-blue px-3 py-1.5 text-xs font-semibold text-slate-950
-         hover:brightness-110 transition-all;
+  @apply rounded bg-pilot-blue px-4 py-1.5 text-xs font-semibold text-slate-950
+         hover:brightness-110 active:brightness-90 transition-all;
 }
 
-/* Icon + label button (TopBar, Sidebar actions) */
 .icon-btn {
-  @apply flex items-center gap-1.5 rounded border border-transparent px-2 py-1
-         text-xs text-slate-400 hover:bg-[#21262d] hover:text-slate-100
+  @apply flex items-center gap-1.5 rounded border border-transparent px-2.5 py-1.5
+         text-xs font-medium text-slate-300 hover:bg-[#21262d] hover:text-slate-100
          disabled:opacity-40 transition-colors;
 }
 
 .icon-btn.accent {
-  @apply border-pilot-line text-pilot-blue hover:bg-teal-900/30 hover:text-teal-300;
+  @apply border-[#30363d] text-pilot-blue hover:bg-teal-900/30 hover:border-pilot-blue/40 hover:text-teal-300;
 }
 
 .input {
-  @apply rounded border border-pilot-line bg-[#0d1117] px-2 py-1 text-sm text-slate-100
-         outline-none focus:border-pilot-blue transition-colors;
-}
-
-/* react-day-picker dark theme */
-.gitpilot-cal .rdp-root {
-  --rdp-accent-color: #38bdf8;
-  --rdp-accent-background-color: #38bdf820;
-  --rdp-range_middle-background-color: #38bdf818;
-  --rdp-range_middle-color: #cbd5e1;
-  --rdp-range_start-date-background-color: #38bdf8;
-  --rdp-range_start-color: #0d1117;
-  --rdp-range_end-date-background-color: #38bdf8;
-  --rdp-range_end-color: #0d1117;
-  --rdp-today-color: #38bdf8;
-  --rdp-day-height: 28px;
-  --rdp-day-width: 28px;
-  --rdp-day_button-height: 26px;
-  --rdp-day_button-width: 26px;
-  --rdp-day_button-border-radius: 4px;
-  --rdp-nav_button-height: 1.5rem;
-  --rdp-nav_button-width: 1.5rem;
-  --rdp-nav-height: 2rem;
-  --rdp-outside-opacity: 0.3;
-  --rdp-disabled-opacity: 0.2;
-  color: #94a3b8;
-  font-size: 11px;
-  margin: 0;
-}
-
-.gitpilot-cal .rdp-month_caption {
-  color: #cbd5e1;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.gitpilot-cal .rdp-weekday {
-  color: #475569;
-  font-size: 10px;
-}
-
-.gitpilot-cal .rdp-day_button:hover:not([disabled]) {
-  background: #21262d;
-  color: #e2e8f0;
-}
-
-.gitpilot-cal .rdp-nav button {
-  color: #64748b;
-}
-
-.gitpilot-cal .rdp-nav button:hover {
-  background: #21262d;
-  color: #94a3b8;
+  @apply rounded border border-[#30363d] bg-[#0d1117] px-2.5 py-1.5 text-sm text-slate-100
+         placeholder:text-slate-600 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue/20 transition-colors;
 }
 
 .row {
-  @apply flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[#21262d];
+  @apply flex items-center justify-between gap-2 rounded px-2 py-1.5 hover:bg-[#21262d];
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #21262d; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #14b8a644; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #14b8a666; }

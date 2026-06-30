@@ -77,7 +77,7 @@ export function RepoManagementPanel() {
         {/* Recent repos list */}
         <div className="min-h-0 flex-1 overflow-auto px-4 py-2">
           {recent.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-slate-600">
+            <div className="flex h-full items-center justify-center text-sm text-slate-400">
               No recent repositories
             </div>
           ) : (
@@ -95,7 +95,7 @@ export function RepoManagementPanel() {
                         : 'border-transparent hover:border-[#30363d] hover:bg-[#161b22]'
                     }`}
                   >
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-pilot-blue/20 text-pilot-blue' : 'bg-[#161b22] text-slate-600'}`}>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-pilot-blue/20 text-pilot-blue' : 'bg-[#161b22] text-slate-500'}`}>
                       <FolderPlus size={15} />
                     </span>
                     <button className="min-w-0 flex-1 text-left" onClick={() => void handleOpen(path)}>
@@ -107,10 +107,10 @@ export function RepoManagementPanel() {
                           </span>
                         )}
                       </div>
-                      <div className="truncate text-[11px] text-slate-600">{dir || path}</div>
+                      <div className="truncate text-[11px] text-slate-400">{dir || path}</div>
                     </button>
                     <button
-                      className="shrink-0 rounded p-1.5 text-slate-700 opacity-0 transition-all hover:bg-red-900/30 hover:text-red-400 group-hover:opacity-100"
+                      className="shrink-0 rounded p-1.5 text-slate-500 opacity-0 transition-all hover:bg-red-900/30 hover:text-red-400 group-hover:opacity-100"
                       title="Remove from list"
                       onClick={() => void handleRemove(path)}
                     >

@@ -43,7 +43,7 @@ export function CommitPanel() {
           placeholder="Commit message (⌘↵ to commit)"
         />
         <button
-          className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded border border-pilot-line bg-[#21262d] px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-[#30363d] hover:text-slate-200"
+          className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded border border-[#30363d] bg-[#21262d] px-2 py-1 text-[11px] text-slate-400 transition-colors hover:bg-[#30363d] hover:text-slate-200"
           title="Generate commit message with AI"
           onClick={generateMessage}
           disabled={!repo}
@@ -56,7 +56,7 @@ export function CommitPanel() {
       {/* Action buttons */}
       <div className="flex gap-1.5">
         <button
-          className="flex-1 rounded bg-pilot-blue py-1.5 text-xs font-semibold text-slate-950 transition-colors hover:bg-sky-300 disabled:opacity-40"
+          className="flex-1 rounded bg-pilot-blue py-1.5 text-xs font-bold text-slate-950 transition-colors hover:brightness-110 active:brightness-90 disabled:opacity-40"
           onClick={commit}
           disabled={!repo || (!stagedCount && !amend) || !msg.trim()}
           title="Commit staged changes"

@@ -102,7 +102,7 @@ export function StatusPanel() {
           </div>
         )}
         {stagedOpen && stagedCount === 0 && (
-          <div className="px-6 py-2 text-[11px] text-slate-600">No staged files</div>
+          <div className="px-6 py-2 text-[11px] text-slate-500">No staged files</div>
         )}
       </div>
 
@@ -167,7 +167,7 @@ export function StatusPanel() {
               />
             ))}
             {unstagedCount === 0 && (
-              <div className="px-6 py-2 text-[11px] text-slate-600">No unstaged changes</div>
+              <div className="px-6 py-2 text-[11px] text-slate-500">No unstaged changes</div>
             )}
           </div>
         )}
